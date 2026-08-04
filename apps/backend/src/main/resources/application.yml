@@ -1,0 +1,117 @@
+spring:
+  application:
+    name: enterprise-api-copilot-backend
+
+  profiles:
+    active: ${APP_ENV:local}
+
+  # Jackson
+  jackson:
+    default-property-inclusion: non_null
+    serialization:
+      write-dates-as-timestamps: false
+    deserialization:
+      fail-on-unknown-properties: false
+
+  # JPA
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: false
+
+  # Flyway
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+
+  # Datasource (overridden per profile)
+  datasource:
+    url: jdbc:postgresql://${POSTGRES_HOST:localhost}:${POSTGRES_PORT:5432}/${POSTGRES_DB:api_copilot}
+    username: ${POSTGRES_USER:api_copilot}
+    password: ${POSTGRES_PASSWORD:changeme}
+    hikari:
+      pool-name: CopilotHikariPool
+      maximum-pool-size: 20
+      minimum-idle: 5
+      connection-timeout: 30000
+      idle-timeout: 600000
+      max-lifetime: 1800000
+
+  # Redis
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+
+# Server
+server:
+  port: ${BACKEND_PORT:8080}
+  shutdown: graceful
+  compression:
+    enabled: true
+    mime-types: application/json,text/plain,text/html
+  error:
+    include-message: never
+    include-binding-errors: never
+    include-stacktrace: never
+
+# Actuator
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus,loggers
+      base-path: /actuator
+  endpoint:
+    health:
+      show-details: when_authorized
+      probes:
+        enabled: true
+  health:
+    livenessState:
+      enabled: true
+    readinessState:
+      enabled: true
+  metrics:
+    tags:
+      application: ${spring.application.name}
+      environment: ${spring.profiles.active}
+  tracing:
+    sampling:
+      probability: 1.0
+  otlp:
+    tracing:
+      endpoint: ${OTEL_EXPORTER_OTLP_ENDPOINT:http://localhost:4317}
+
+# SpringDoc / Swagger
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    operations-sorter: method
+    tags-sorter: alpha
+    display-request-duration: true
+  show-actuator: false
+
+# App-specific configuration
+app:
+  cors:
+    allowed-origins:
+      - ${BACKEND_CORS_ORIGINS:http://localhost:3000}
+  agent:
+    service-url: ${AGENT_SERVICE_URL:http://localhost:8000}
+    api-key: ${AGENT_SERVICE_API_KEY:}
+    timeout-seconds: 60
+  apigee:
+    base-url: ${APIGEE_BASE_URL:https://apigee.googleapis.com}
+    org: ${APIGEE_ORG:}
+    env: ${APIGEE_ENV:sandbox}
+    client-id: ${APIGEE_CLIENT_ID:}
+    client-secret: ${APIGEE_CLIENT_SECRET:}

@@ -1,0 +1,46 @@
+name: Agent Tests
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'agents/**'
+      - 'skills/**'
+      - '.github/workflows/agent-tests.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'agents/**'
+      - 'skills/**'
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Python Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          pip install -r agents/requirements.txt
+          pip install pytest pytest-cov ruff black
+
+      - name: Lint (ruff)
+        run: ruff check agents/ skills/
+
+      - name: Format check (black)
+        run: black --check agents/ skills/
+
+      - name: Run tests
+        run: pytest agents/ skills/ --cov=. --cov-report=xml -v

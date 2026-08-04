@@ -1,0 +1,69 @@
+---
+name: "✨ Feature Request"
+description: "Propose a new feature or improvement."
+labels: ["enhancement", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for suggesting an improvement! Please provide as much detail as possible.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem Statement
+      description: What problem does this feature solve? Who is affected?
+      placeholder: "As a developer, I want to... so that..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed Solution
+      description: Describe your proposed solution or feature.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives Considered
+      description: What other approaches did you consider?
+
+  - type: dropdown
+    id: component
+    attributes:
+      label: Component
+      options:
+        - Backend (Spring Boot)
+        - Frontend (React)
+        - CLI (Go)
+        - Agent (LangGraph)
+        - Skill (MCP)
+        - Infrastructure (Docker/K8s)
+        - Documentation
+        - New Component
+    validations:
+      required: true
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority
+      options:
+        - Low (nice-to-have)
+        - Medium (useful improvement)
+        - High (blocks significant use case)
+        - Critical (blocking production adoption)
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Checklist
+      options:
+        - label: I have searched existing issues and this is not a duplicate
+          required: true
+        - label: I am willing to help implement this feature

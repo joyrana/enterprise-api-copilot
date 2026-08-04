@@ -1,0 +1,42 @@
+# syntax=docker/dockerfile:1.9
+# ─────────────────────────────────────────────────────────────────────────────
+# Stage 1: Build
+# ─────────────────────────────────────────────────────────────────────────────
+FROM eclipse-temurin:21-jdk-alpine AS builder
+
+WORKDIR /workspace
+
+COPY apps/backend/pom.xml .
+COPY apps/backend/.mvn .mvn
+COPY apps/backend/mvnw mvnw
+
+# Download dependencies first (leverages Docker layer cache)
+RUN ./mvnw dependency:go-offline -q
+
+COPY apps/backend/src src
+COPY apps/backend/checkstyle checkstyle
+
+RUN ./mvnw clean package -DskipTests -Dspotless.check.skip=true -Dcheckstyle.skip=true
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Stage 2: Runtime (distroless for minimal attack surface)
+# ─────────────────────────────────────────────────────────────────────────────
+FROM gcr.io/distroless/java21-debian12 AS runtime
+
+LABEL org.opencontainers.image.title="Enterprise API Copilot Backend"
+LABEL org.opencontainers.image.description="Spring Boot backend for Enterprise API Copilot"
+LABEL org.opencontainers.image.licenses="Apache-2.0"
+LABEL org.opencontainers.image.source="https://github.com/your-org/enterprise-api-copilot"
+
+# Non-root user (distroless uses nonroot by default)
+USER nonroot:nonroot
+
+WORKDIR /app
+
+COPY --from=builder --chown=nonroot:nonroot /workspace/target/*.jar app.jar
+
+EXPOSE 8080
+
+ENV JAVA_OPTS="-XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0 -Djava.security.egd=file:/dev/./urandom"
+
+ENTRYPOINT ["java", "-jar", "app.jar"]

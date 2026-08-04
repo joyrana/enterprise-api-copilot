@@ -1,0 +1,14 @@
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/api_copilot_test
+    username: api_copilot
+    password: changeme
+  flyway:
+    enabled: true
+  jpa:
+    show-sql: false
+
+logging:
+  level:
+    root: WARN
+    io.enterprise.copilot: INFO

@@ -1,0 +1,138 @@
+# Root .gitignore for Enterprise API Copilot
+
+# ─── Java / Maven ───────────────────────────────────────────────────────────
+target/
+*.class
+*.jar
+*.war
+*.ear
+*.nar
+*.zip
+*.tar.gz
+*.rar
+hs_err_pid*
+replay_pid*
+.mvn/timing.properties
+.mvn/wrapper/maven-wrapper.jar
+
+# ─── IDE ─────────────────────────────────────────────────────────────────────
+.idea/
+*.iws
+*.iml
+*.ipr
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+.project
+.classpath
+.factorypath
+.settings/
+*.launch
+
+# ─── Go ──────────────────────────────────────────────────────────────────────
+apps/cli/bin/
+apps/cli/dist/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+__debug_bin
+
+# ─── Node / Frontend ─────────────────────────────────────────────────────────
+node_modules/
+dist/
+build/
+.next/
+out/
+*.local
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+.parcel-cache/
+.turbo/
+
+# ─── Python ──────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyo
+.Python
+.venv/
+venv/
+env/
+ENV/
+*.egg-info/
+dist/
+.eggs/
+pip-wheel-metadata/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+htmlcov/
+.coverage
+.coverage.*
+
+# ─── Environment & Secrets ───────────────────────────────────────────────────
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+*_rsa
+*_dsa
+*_ed25519
+*_ecdsa
+*.pub
+secrets/
+credentials/
+
+# ─── Docker ──────────────────────────────────────────────────────────────────
+docker/.env
+
+# ─── Kubernetes / Helm ───────────────────────────────────────────────────────
+deployment/helm/*/charts/
+deployment/helm/*/*.lock
+kubeconfig
+*.kubeconfig
+
+# ─── Terraform ───────────────────────────────────────────────────────────────
+.terraform/
+*.tfstate
+*.tfstate.backup
+*.tfvars
+!*.tfvars.example
+.terraform.lock.hcl
+
+# ─── Logs ─────────────────────────────────────────────────────────────────────
+*.log
+logs/
+log/
+
+# ─── Test Artifacts ───────────────────────────────────────────────────────────
+coverage/
+test-results/
+*.xml
+!**/pom.xml
+!**/checkstyle*.xml
+!**/.checkstyle
+
+# ─── Miscellaneous ────────────────────────────────────────────────────────────
+.cache/
+tmp/
+temp/
+*.tmp
+*.bak
+*.orig
+*.patch
+.gradle/

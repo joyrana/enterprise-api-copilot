@@ -1,0 +1,103 @@
+---
+name: "🐛 Bug Report"
+description: "Something is broken. Help us fix it."
+labels: ["bug", "needs-triage"]
+assignees: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for taking the time to report a bug!
+        Please fill out the form below as completely as possible.
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Bug Description
+      description: A clear and concise description of what the bug is.
+      placeholder: Describe the bug...
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to Reproduce
+      description: Steps to reproduce the behavior.
+      placeholder: |
+        1. Run `copilot ask "Create a payment"`
+        2. See error...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected Behavior
+      description: What did you expect to happen?
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual Behavior
+      description: What actually happened? Include full error output if available.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: component
+    attributes:
+      label: Component
+      options:
+        - Backend (Spring Boot)
+        - Frontend (React)
+        - CLI (Go)
+        - Agent (LangGraph)
+        - Skill (MCP)
+        - Infrastructure (Docker/K8s)
+        - Documentation
+        - Other
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: What version of Enterprise API Copilot are you running?
+      placeholder: "e.g., 0.2.1"
+    validations:
+      required: true
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: |
+        OS, Java version, Go version, Node version, etc.
+      placeholder: |
+        - OS: macOS 14.5
+        - Java: 21.0.3 (Temurin)
+        - Go: 1.22.3
+        - Node: 20.12.2
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant Log Output
+      description: Paste any relevant log lines here (redact secrets).
+      render: shell
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Checklist
+      options:
+        - label: I have searched existing issues and this is not a duplicate
+          required: true
+        - label: I have removed any sensitive information from logs/screenshots
+          required: true

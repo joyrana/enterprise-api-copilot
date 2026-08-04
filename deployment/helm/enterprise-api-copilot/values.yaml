@@ -1,0 +1,108 @@
+# Default values for enterprise-api-copilot Helm chart.
+# Override in values-<env>.yaml for each environment.
+
+global:
+  imageRegistry: ""
+  imagePullSecrets: []
+
+# ─── Backend ─────────────────────────────────────────────────────────────────
+backend:
+  enabled: true
+  image:
+    repository: api-copilot/backend
+    tag: "0.1.0"
+    pullPolicy: IfNotPresent
+  replicaCount: 2
+  resources:
+    requests:
+      cpu: "500m"
+      memory: "512Mi"
+    limits:
+      cpu: "2"
+      memory: "2Gi"
+  service:
+    type: ClusterIP
+    port: 8080
+  ingress:
+    enabled: true
+    className: nginx
+    annotations: {}
+    hosts:
+      - host: api-copilot.example.com
+        paths:
+          - path: /api
+            pathType: Prefix
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 70
+  env:
+    POSTGRES_HOST: ""
+    POSTGRES_PORT: "5432"
+    POSTGRES_DB: api_copilot
+    REDIS_HOST: ""
+    REDIS_PORT: "6379"
+  envFromSecrets:
+    - name: copilot-secrets
+      keys:
+        - POSTGRES_USER
+        - POSTGRES_PASSWORD
+        - OPENAI_API_KEY
+        - JWT_SECRET
+
+# ─── Frontend ─────────────────────────────────────────────────────────────────
+frontend:
+  enabled: true
+  image:
+    repository: api-copilot/frontend
+    tag: "0.1.0"
+    pullPolicy: IfNotPresent
+  replicaCount: 2
+  resources:
+    requests:
+      cpu: "100m"
+      memory: "128Mi"
+    limits:
+      cpu: "500m"
+      memory: "256Mi"
+  service:
+    type: ClusterIP
+    port: 3000
+  ingress:
+    enabled: true
+    className: nginx
+    hosts:
+      - host: api-copilot.example.com
+        paths:
+          - path: /
+            pathType: Prefix
+
+# ─── PostgreSQL (Bitnami) ─────────────────────────────────────────────────────
+postgresql:
+  enabled: true
+  auth:
+    database: api_copilot
+    username: api_copilot
+    existingSecret: copilot-db-secret
+  primary:
+    persistence:
+      enabled: true
+      size: 10Gi
+
+# ─── Redis (Bitnami) ──────────────────────────────────────────────────────────
+redis:
+  enabled: true
+  auth:
+    enabled: true
+    existingSecret: copilot-redis-secret
+  master:
+    persistence:
+      enabled: true
+      size: 2Gi
+
+# ─── Service Account ─────────────────────────────────────────────────────────
+serviceAccount:
+  create: true
+  annotations: {}
+  name: ""

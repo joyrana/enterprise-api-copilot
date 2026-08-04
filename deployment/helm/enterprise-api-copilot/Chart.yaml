@@ -1,0 +1,28 @@
+apiVersion: v2
+name: enterprise-api-copilot
+description: Enterprise API Copilot — Agentic AI Platform for Enterprise API Discovery, Testing, and Automation
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+maintainers:
+  - name: Enterprise API Copilot Team
+    email: team@enterprise-api-copilot.io
+    url: https://github.com/your-org/enterprise-api-copilot
+keywords:
+  - ai
+  - api
+  - copilot
+  - langgraph
+  - enterprise
+home: https://github.com/your-org/enterprise-api-copilot
+sources:
+  - https://github.com/your-org/enterprise-api-copilot
+dependencies:
+  - name: postgresql
+    version: "15.x.x"
+    repository: "https://charts.bitnami.com/bitnami"
+    condition: postgresql.enabled
+  - name: redis
+    version: "19.x.x"
+    repository: "https://charts.bitnami.com/bitnami"
+    condition: redis.enabled
