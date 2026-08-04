@@ -1,0 +1,3 @@
+# config
+
+Shared platform configuration.

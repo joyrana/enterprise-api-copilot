@@ -1,0 +1,3 @@
+# auth
+
+Platform authentication assets.

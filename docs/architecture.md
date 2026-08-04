@@ -36,6 +36,18 @@ Enterprise API Copilot is a multi-layer platform consisting of:
 | Integration | Apigee / External APIs | Enterprise system connectivity |
 | Storage | PostgreSQL + Redis + Vector DB | Data persistence |
 
+```mermaid
+graph TD
+  CLI[Go CLI] --> Backend[Spring Boot Backend]
+  Frontend[React Frontend] --> Backend
+  Backend --> Supervisor[AI Supervisor]
+  Supervisor --> Planner[AI Planner]
+  Planner --> Skills[MCP Skills]
+  Skills --> Apigee[Apigee Gateway]
+  Apigee --> External[Enterprise APIs]
+  Backend --> Data[(PostgreSQL/Redis/Vector DB)]
+```
+
 ---
 
 ## 2. Architectural Principles
@@ -74,12 +86,13 @@ Bounded contexts:
 
 Neither the CLI nor the Frontend communicate directly with AI agents or external APIs. All traffic routes through the Backend, which enforces authentication, authorization, rate limiting, and audit logging.
 
-```
-[CLI]         ──────►  [Backend]  ──────►  [Agent Service]
-[Frontend]    ──────►  [Backend]  ──────►  [Agent Service]
-                           │
-                           ▼
-                      [Apigee]  ──────►  [External APIs]
+```mermaid
+graph LR
+  CLI --> Backend
+  Frontend --> Backend
+  Backend --> AgentService
+  Backend --> Apigee
+  Apigee --> ExternalAPIs
 ```
 
 ---
@@ -173,10 +186,10 @@ Supervisor Agent (LangGraph)
        │
        └─► For each step:
                 │
-                ├─► MCP Skill: api-discovery  →  Find matching API
+                ├─► MCP Skill: api.discovery    →  Find matching API
                 ├─► MCP Skill: jwt             →  Get auth token
-                ├─► MCP Skill: api-executor    →  Execute API call
-                └─► MCP Skill: sdk-generator   →  Generate curl/SDK
+                ├─► MCP Skill: api.executor     →  Execute API call
+                └─► MCP Skill: api.sdk_generator →  Generate curl/SDK
        │
        ▼
 Backend: Stream response back (SSE)
@@ -236,10 +249,10 @@ Skills are **stateless MCP tools** invoked by agents. They handle a single respo
 
 | Skill | Input | Output |
 |---|---|---|
-| `api-discovery` | Natural language query | Ranked list of matching APIs |
-| `api-executor` | API spec + parameters + token | HTTP response |
+| `api.discovery` | Natural language query | Ranked list of matching APIs |
+| `api.executor` | API spec + parameters + token | HTTP response |
 | `jwt` | Client credentials | Signed JWT |
-| `sdk-generator` | API request details | curl + SDK code |
+| `api.sdk_generator` | API request details | curl + SDK code |
 | `documentation` | API spec | Generated markdown docs |
 
 ---
@@ -260,19 +273,15 @@ Key controls:
 
 ## 8. Observability Architecture
 
-```
-Backend / Agents / CLI
-        │
-        │  OpenTelemetry SDK
-        ▼
-OTEL Collector
-        │
-        ├──► Tempo (Traces)
-        ├──► Prometheus (Metrics)
-        └──► Loki (Logs)
-                │
-                ▼
-           Grafana Dashboard
+```mermaid
+graph TD
+    Producers[Backend / Agents / CLI] --> OTel[OpenTelemetry Collector]
+    OTel --> Tempo[Tempo - Traces]
+    OTel --> Prom[Prometheus - Metrics]
+    OTel --> Loki[Loki - Logs]
+    Tempo --> Grafana[Grafana Dashboards]
+    Prom --> Grafana
+    Loki --> Grafana
 ```
 
 Every request carries a `trace-id` from ingress to storage.

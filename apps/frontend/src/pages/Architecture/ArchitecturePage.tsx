@@ -1,7 +1,5 @@
 /**
  * Architecture page — visual overview of the platform architecture.
- *
- * TODO(#50): Add interactive architecture diagram (Mermaid or React Flow).
  */
 export function ArchitecturePage() {
   return (
@@ -13,46 +11,28 @@ export function ArchitecturePage() {
         </p>
       </div>
 
-      {/* ASCII Architecture Diagram */}
+      {/* Mermaid Architecture Diagram Source */}
       <div className="card">
         <h2 className="text-sm font-semibold text-gray-300 mb-4 uppercase tracking-wider">
           System Overview
         </h2>
         <pre className="text-xs text-gray-400 font-mono leading-relaxed overflow-x-auto">
-{`┌──────────────────────────────────────────────────────────────────────┐
-│                        Enterprise API Copilot                        │
-├────────────────┬─────────────────────────────┬───────────────────────┤
-│   CLI (Go)     │     Frontend (React/TS)      │   External Clients    │
-│  Cobra + TUI   │  Vite + TailwindCSS          │   REST / gRPC         │
-└───────┬────────┴──────────────┬──────────────┴───────────┬───────────┘
-        │                       │                           │
-        └───────────────────────┼───────────────────────────┘
-                                ▼
-┌───────────────────────────────────────────────────────────────────────┐
-│                     Backend API (Spring Boot 3 / Java 21)             │
-│  ┌─────────────┐ ┌───────────────┐ ┌──────────────┐ ┌─────────────┐ │
-│  │  Auth API   │ │  Copilot API  │ │  History API │ │  Health API │ │
-│  └─────────────┘ └───────────────┘ └──────────────┘ └─────────────┘ │
-└───────────────────────────────┬───────────────────────────────────────┘
-                                │
-                                ▼
-┌───────────────────────────────────────────────────────────────────────┐
-│                    AI Agent Layer (Python / LangGraph)                │
-│  ┌──────────────┐  ┌──────────────┐  ┌───────────────┐               │
-│  │  Supervisor  │→ │   Planner    │→ │  Reflection   │               │
-│  └──────────────┘  └──────────────┘  └───────────────┘               │
-│                    ┌────────────────────────────────────────────────┐ │
-│                    │              MCP Skills                        │ │
-│                    │  api-discovery │ api-executor │ sdk-generator  │ │
-│                    └────────────────────────────────────────────────┘ │
-└───────────────────────────────┬───────────────────────────────────────┘
-                                │
-                    ┌───────────┴───────────┐
-                    ▼                       ▼
-          ┌─────────────────┐    ┌──────────────────┐
-          │  Apigee Gateway │    │  Vector Database  │
-          │  (Auth + Proxy) │    │  (API Knowledge)  │
-          └─────────────────┘    └──────────────────┘`}
+{`graph TD
+  Developer --> CLI
+  Developer --> Frontend
+  CLI --> Backend
+  Frontend --> Backend
+  Backend --> Supervisor
+  Supervisor --> Planner
+  Planner --> SkillRouter
+  SkillRouter --> APIDiscovery[api.discovery]
+  SkillRouter --> APIExecutor[api.executor]
+  SkillRouter --> SDKGenerator[api.sdk_generator]
+  SkillRouter --> JWT[jwt]
+  SkillRouter --> Docs[docs]
+  SkillRouter --> GitHub[github]
+  APIExecutor --> Apigee
+  Apigee --> EnterpriseAPIs[Enterprise APIs]`}
         </pre>
       </div>
 
@@ -86,7 +66,7 @@ export function ArchitecturePage() {
           {
             title: 'MCP Skills',
             tech: 'Python · MCP Protocol',
-            description: 'Stateless tools: api-discovery, api-executor, jwt, sdk-generator.',
+            description: 'Stateless tools grouped as api/, docs/, jwt/, github/.',
             status: '📋 Planned',
           },
           {

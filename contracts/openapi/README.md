@@ -1,0 +1,3 @@
+# OpenAPI Contracts
+
+OpenAPI definitions.

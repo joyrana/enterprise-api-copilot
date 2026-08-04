@@ -34,7 +34,7 @@ test-cli: ## Run CLI tests
 	cd apps/cli && go test ./...
 
 test-agents: ## Run agent and skill tests
-	pytest agents/ skills/ -v
+	pytest ai/ skills/ agents/ -v
 
 test: test-backend test-frontend test-cli test-agents ## Run all tests
 
@@ -49,7 +49,7 @@ lint-cli: ## Run Go linter
 	cd apps/cli && golangci-lint run
 
 lint-agents: ## Run Python linters
-	ruff check agents/ skills/ && black --check agents/ skills/
+	ruff check ai/ skills/ agents/ && black --check ai/ skills/ agents/
 
 lint: lint-backend lint-frontend lint-cli lint-agents ## Run all linters
 
@@ -64,7 +64,7 @@ fmt-cli: ## Format Go code
 	cd apps/cli && gofmt -w .
 
 fmt-agents: ## Format Python code
-	black agents/ skills/ && ruff check --fix agents/ skills/
+	black ai/ skills/ agents/ && ruff check --fix ai/ skills/ agents/
 
 fmt: fmt-backend fmt-frontend fmt-cli fmt-agents ## Format all code
 

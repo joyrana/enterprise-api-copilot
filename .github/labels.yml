@@ -1,0 +1,46 @@
+labels:
+  - name: agent
+    color: "5319E7"
+    description: AI agent orchestration related
+  - name: backend
+    color: "1D76DB"
+    description: Spring Boot backend work
+  - name: frontend
+    color: "0052CC"
+    description: React frontend work
+  - name: cli
+    color: "0E8A16"
+    description: Go CLI work
+  - name: documentation
+    color: "006B75"
+    description: Documentation improvements
+  - name: good-first-issue
+    color: "7057FF"
+    description: Good starter task
+  - name: help-wanted
+    color: "008672"
+    description: Extra attention is needed
+  - name: enhancement
+    color: "A2EEEF"
+    description: Improvement request
+  - name: bug
+    color: "D73A4A"
+    description: Something is not working
+  - name: feature
+    color: "C5DEF5"
+    description: New capability request
+  - name: langgraph
+    color: "BFD4F2"
+    description: LangGraph-specific work
+  - name: mcp
+    color: "FBCA04"
+    description: Model Context Protocol related
+  - name: spring
+    color: "6DB33F"
+    description: Spring ecosystem changes
+  - name: go
+    color: "00ADD8"
+    description: Go language changes
+  - name: react
+    color: "61DAFB"
+    description: React-specific work

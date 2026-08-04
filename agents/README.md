@@ -1,16 +1,17 @@
-# Enterprise API Copilot — AI Agents
+# Enterprise API Copilot — AI Agents (Legacy Compatibility)
 
-This directory contains all LangGraph agent implementations.
+This directory now provides compatibility shims for the new `ai/` package.
+New development should target `ai/`.
 
 ## Structure
 
 ```
 agents/
-├── supervisor/     # Intent classification and routing
-├── planner/        # Execution plan generation
-├── reflection/     # Error analysis and retry
-├── memory/         # Conversation memory management
-└── shared/         # Shared types, state, utilities
+├── supervisor/     # Legacy import path shim
+├── planner/        # Legacy import path shim
+├── reflection/     # Legacy import path shim
+├── memory/         # Legacy import path shim
+└── shared/         # Legacy state shim
 ```
 
 ## Development Setup
@@ -36,5 +37,7 @@ START → [supervisor] → [planner] → [executor] → [memory] → END
                 ↑           ↓           ↓
                 └─[reflection]←─────────┘
 ```
+
+Canonical runtime code lives in `../ai/`.
 
 See [docs/architecture.md](../docs/architecture.md) for full details.

@@ -62,42 +62,22 @@ The platform supports agentic AI workflows, Apigee-backed authentication, multi-
 
 ## Architecture
 
-```
-┌──────────────────────────────────────────────────────────────────────┐
-│                        Enterprise API Copilot                        │
-├────────────────┬─────────────────────────────┬───────────────────────┤
-│   CLI (Go)     │     Frontend (React/TS)      │   External Clients    │
-│  Cobra + TUI   │  Vite + TailwindCSS          │   REST / gRPC         │
-└───────┬────────┴──────────────┬──────────────┴───────────┬───────────┘
-        │                       │                           │
-        ▼                       ▼                           ▼
-┌───────────────────────────────────────────────────────────────────────┐
-│                     Backend API (Spring Boot 3 / Java 21)             │
-│  ┌─────────────┐ ┌───────────────┐ ┌──────────────┐ ┌─────────────┐ │
-│  │  Auth API   │ │  Copilot API  │ │  History API │ │  Health API │ │
-│  └─────────────┘ └───────────────┘ └──────────────┘ └─────────────┘ │
-└───────────────────────────────┬───────────────────────────────────────┘
-                                │
-                                ▼
-┌───────────────────────────────────────────────────────────────────────┐
-│                          AI Agent Layer (Python / LangGraph)          │
-│  ┌──────────────┐  ┌──────────────┐  ┌───────────────┐               │
-│  │  Supervisor  │→ │   Planner    │→ │  Reflection   │               │
-│  └──────────────┘  └──────────────┘  └───────────────┘               │
-│                            │                                          │
-│                            ▼                                          │
-│  ┌──────────────────────────────────────────────────────────────────┐ │
-│  │                        MCP Skills                                │ │
-│  │  api-discovery │ api-executor │ jwt │ sdk-generator │ docs       │ │
-│  └──────────────────────────────────────────────────────────────────┘ │
-└───────────────────────────────┬───────────────────────────────────────┘
-                                │
-                    ┌───────────┴───────────┐
-                    ▼                       ▼
-          ┌─────────────────┐    ┌──────────────────┐
-          │  Apigee Gateway │    │  Vector Database  │
-          │  (Auth + Proxy) │    │  (API Knowledge)  │
-          └─────────────────┘    └──────────────────┘
+```mermaid
+graph TD
+  Developer --> CLI
+  Developer --> Frontend
+  CLI --> Backend
+  Frontend --> Backend
+  Backend --> Supervisor
+  Supervisor --> Planner
+  Planner --> SkillRouter
+  SkillRouter --> APISkill
+  SkillRouter --> DocSkill
+  SkillRouter --> JWTSkill
+  APISkill --> Apigee
+  Apigee --> ExternalAPI[Enterprise APIs]
+  Backend --> Audit
+  Backend --> Telemetry
 ```
 
 ### Key Design Principles
@@ -114,28 +94,56 @@ The platform supports agentic AI workflows, Apigee-backed authentication, multi-
 
 ```
 enterprise-api-copilot/
+├── platform/
+│   ├── auth/             # Identity and auth integrations
+│   ├── gateway/          # API gateway controls
+│   ├── config/           # Shared runtime configuration
+│   ├── audit/            # Compliance and audit events
+│   ├── telemetry/        # Tracing/metrics/log conventions
+│   └── registry/         # Service and API registry assets
 ├── apps/
 │   ├── backend/          # Spring Boot 3 backend (Java 21)
 │   ├── frontend/         # React + TypeScript + Vite frontend
 │   └── cli/              # Go CLI (Cobra + BubbleTea)
-├── agents/
-│   ├── supervisor/       # AI Supervisor agent (LangGraph)
-│   ├── planner/          # Execution planner agent
-│   ├── reflection/       # Self-reflection / retry agent
-│   └── memory/           # Conversation memory agent
+├── ai/
+│   ├── supervisor/       # AI Supervisor runtime module
+│   ├── planner/          # Execution planner runtime module
+│   ├── memory/           # Conversation memory runtime module
+│   └── reflection/       # Reflection and retry module
 ├── skills/
-│   ├── api-discovery/    # MCP skill: find APIs from natural language
-│   ├── api-executor/     # MCP skill: execute API calls
-│   ├── documentation/    # MCP skill: generate API documentation
-│   ├── jwt/              # MCP skill: JWT generation and validation
-│   └── sdk-generator/    # MCP skill: generate SDK code snippets
+│   ├── api/              # API discovery/execution skill group
+│   ├── docs/             # Documentation skill group
+│   ├── jwt/              # JWT skill group
+│   └── github/           # GitHub automation skill group
+├── sdk/
+│   ├── java/
+│   ├── python/
+│   ├── typescript/
+│   └── go/
+├── contracts/
+│   ├── openapi/
+│   ├── asyncapi/
+│   └── json-schema/
+├── observability/
+│   ├── dashboards/
+│   ├── otel/
+│   ├── prometheus/
+│   ├── grafana/
+│   └── jaeger/
+├── design/
+│   ├── wireframes/
+│   ├── sequence/
+│   ├── component/
+│   └── deployment/
 ├── apigee/               # Apigee proxy configuration and policies
 ├── deployment/           # Kubernetes manifests and Helm charts
 ├── docker/               # Dockerfiles and compose files
-├── docs/                 # Architecture, ADRs, roadmap, standards
+├── docs/                 # Architecture, ADRs, spring board, standards
 ├── examples/             # Example requests and integration demos
 └── .github/              # CI/CD workflows, issue templates
 ```
+
+> Canonical runtime code now lives under `ai/` and grouped `skills/` domains. Legacy `agents/` and legacy skill folders remain as compatibility shims.
 
 ---
 
@@ -226,17 +234,32 @@ copilot api run --natural "Create a ₹500 sandbox payment"
 
 ---
 
-## Roadmap
+## Spring Board
 
-See [docs/roadmap.md](docs/roadmap.md) for the full roadmap.
+See [docs/spring-board.md](docs/spring-board.md) for milestone planning.
 
-| Phase | Goal | Timeline |
-|---|---|---|
-| Phase 1 | Core infrastructure, backend skeleton, CLI scaffold | Q3 2026 |
-| Phase 2 | API discovery skill, Apigee auth integration | Q3 2026 |
-| Phase 3 | Full agentic loop with LangGraph | Q4 2026 |
-| Phase 4 | SDK generation, multi-cloud API gateway support | Q1 2027 |
-| Phase 5 | Enterprise SSO, audit logs, RBAC | Q2 2027 |
+| Milestone | Focus |
+|---|---|
+| Milestone 1 | Foundation |
+| Milestone 2 | Backend |
+| Milestone 3 | CLI |
+| Milestone 4 | AI |
+| Milestone 5 | Skills |
+
+Version milestones are tracked in [docs/milestones.md](docs/milestones.md).
+
+---
+
+## Developer Experience
+
+See [docs/developer-experience.md](docs/developer-experience.md) for:
+
+- Architecture references
+- Coding standards
+- Development workflow
+- Branching strategy
+- Commit convention
+- Release strategy
 
 ---
 

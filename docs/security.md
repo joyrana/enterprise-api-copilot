@@ -86,7 +86,7 @@ public record CreateConversationRequest(
 ### API Executor Allow-listing
 
 ```yaml
-# TODO(#45): Implement URL allow-list in api-executor skill
+# TODO(#45): Implement URL allow-list in api.executor skill
 # Only registered API hosts may be invoked
 allowed_hosts:
   - api.example.com

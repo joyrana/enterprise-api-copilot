@@ -4,12 +4,14 @@ on:
   push:
     branches: [main]
     paths:
+      - 'ai/**'
       - 'agents/**'
       - 'skills/**'
       - '.github/workflows/agent-tests.yml'
   pull_request:
     branches: [main]
     paths:
+      - 'ai/**'
       - 'agents/**'
       - 'skills/**'
 
@@ -33,14 +35,14 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install -r agents/requirements.txt
+          pip install -r ai/requirements.txt
           pip install pytest pytest-cov ruff black
 
       - name: Lint (ruff)
-        run: ruff check agents/ skills/
+        run: ruff check ai/ skills/ agents/
 
       - name: Format check (black)
-        run: black --check agents/ skills/
+        run: black --check ai/ skills/ agents/
 
       - name: Run tests
-        run: pytest agents/ skills/ --cov=. --cov-report=xml -v
+        run: pytest ai/ skills/ agents/ --cov=. --cov-report=xml -v
