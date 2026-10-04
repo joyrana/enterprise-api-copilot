@@ -91,7 +91,7 @@ export function ArchitecturePage() {
         <p className="text-sm text-gray-400">
           For detailed architecture documentation, see{' '}
           <a
-            href="https://github.com/your-org/enterprise-api-copilot/blob/main/docs/architecture.md"
+            href="https://github.com/joyrana/enterprise-api-copilot/blob/main/docs/architecture.md"
             target="_blank"
             rel="noopener noreferrer"
             className="text-brand-400 hover:underline"
@@ -100,7 +100,7 @@ export function ArchitecturePage() {
           </a>{' '}
           and the{' '}
           <a
-            href="https://github.com/your-org/enterprise-api-copilot/blob/main/docs/adr/ADR-0001.md"
+            href="https://github.com/joyrana/enterprise-api-copilot/blob/main/docs/adr/ADR-0001.md"
             target="_blank"
             rel="noopener noreferrer"
             className="text-brand-400 hover:underline"

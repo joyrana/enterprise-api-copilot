@@ -1,1 +1,1 @@
-"""AI agent runtime package."""
+"""Python AI service: agent runtime, knowledge/retrieval, model interfaces, telemetry."""

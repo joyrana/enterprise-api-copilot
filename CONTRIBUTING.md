@@ -32,7 +32,7 @@ By participating in this project, you agree to abide by our [Code of Conduct](CO
    ```
 3. **Add the upstream remote**:
    ```bash
-   git remote add upstream https://github.com/your-org/enterprise-api-copilot.git
+   git remote add upstream https://github.com/joyrana/enterprise-api-copilot.git
    ```
 4. Set up your [development environment](#development-setup).
 
@@ -198,4 +198,4 @@ Please read [docs/coding-standards.md](docs/coding-standards.md) for detailed st
 |------|--------|------|
 | Core Team | @enterprise-api-copilot/maintainers | All |
 
-For questions, open a [Discussion](https://github.com/your-org/enterprise-api-copilot/discussions) rather than an issue.
+For questions, open a [Discussion](https://github.com/joyrana/enterprise-api-copilot/discussions) rather than an issue.

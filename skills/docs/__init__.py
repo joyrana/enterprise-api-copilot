@@ -1,1 +1,1 @@
-"""Documentation skill group."""
+"""Documentation search skill."""

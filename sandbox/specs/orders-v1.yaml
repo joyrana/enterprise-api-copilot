@@ -1,0 +1,90 @@
+# Synthetic API for local development, tests and evaluation. Not a real service.
+openapi: 3.0.3
+info:
+  title: Synthetic Orders API
+  version: "2.1.0"
+  description: Orders, line items and shipment tracking.
+security:
+  - oauth2: [orders:read]
+paths:
+  /v2/orders:
+    get:
+      operationId: listOrders
+      summary: List orders
+      description: Lists orders with optional filtering by fulfilment status.
+      tags: [orders]
+      parameters:
+        - name: fulfilment_status
+          in: query
+          schema: {type: string, enum: [pending, shipped, delivered, returned]}
+      responses:
+        "200": {description: Orders}
+    post:
+      operationId: createOrder
+      summary: Create an order
+      description: Creates an order with line items for a customer.
+      tags: [orders]
+      security:
+        - oauth2: [orders:write]
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema: {type: string}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [customer_id, items]
+              properties:
+                customer_id: {type: string}
+                items:
+                  type: array
+                  minItems: 1
+                  items:
+                    type: object
+                    required: [sku, quantity]
+                    properties:
+                      sku: {type: string}
+                      quantity: {type: integer, minimum: 1}
+      responses:
+        "201": {description: Order created}
+  /v2/orders/{order_id}:
+    get:
+      operationId: getOrder
+      summary: Retrieve an order
+      description: Fetch an order with its line items and totals.
+      tags: [orders]
+      parameters:
+        - name: order_id
+          in: path
+          required: true
+          schema: {type: string}
+      responses:
+        "200": {description: The order}
+        "404": {description: Order not found}
+  /v2/orders/{order_id}/shipment:
+    get:
+      operationId: getShipmentTracking
+      summary: Track a shipment
+      description: Returns carrier, tracking number and delivery events for an order's shipment.
+      tags: [shipping]
+      parameters:
+        - name: order_id
+          in: path
+          required: true
+          schema: {type: string}
+      responses:
+        "200": {description: Shipment tracking details}
+components:
+  securitySchemes:
+    oauth2:
+      type: oauth2
+      flows:
+        clientCredentials:
+          tokenUrl: https://orders.sandbox.example.invalid/oauth/token
+          scopes:
+            orders:read: Read orders
+            orders:write: Create orders

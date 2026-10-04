@@ -1,0 +1,31 @@
+name: Full evaluation
+
+# Full offline suite + retrieval/chunking ablation. Scheduled and on demand, not per PR
+# (ADR-0008). LLM-backed evaluations will be added here behind explicit opt-in secrets.
+
+on:
+  schedule:
+    - cron: "17 3 * * 1" # Mondays 03:17 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  evaluate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.13"
+          cache: pip
+      - run: pip install -e ".[dev]"
+      - name: Full suite
+        run: python -m evals run --suite full --out evals/reports/full
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: eval-full-${{ github.sha }}
+          path: evals/reports/full/

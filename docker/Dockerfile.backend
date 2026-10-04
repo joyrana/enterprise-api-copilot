@@ -2,21 +2,20 @@
 # ─────────────────────────────────────────────────────────────────────────────
 # Stage 1: Build
 # ─────────────────────────────────────────────────────────────────────────────
-FROM eclipse-temurin:21-jdk-alpine AS builder
+# The repository has no Maven wrapper; build with the official Maven image instead.
+FROM maven:3.9-eclipse-temurin-21 AS builder
 
 WORKDIR /workspace
 
 COPY apps/backend/pom.xml .
-COPY apps/backend/.mvn .mvn
-COPY apps/backend/mvnw mvnw
 
 # Download dependencies first (leverages Docker layer cache)
-RUN ./mvnw dependency:go-offline -q
+RUN mvn -B -q dependency:go-offline
 
 COPY apps/backend/src src
 COPY apps/backend/checkstyle checkstyle
 
-RUN ./mvnw clean package -DskipTests -Dspotless.check.skip=true -Dcheckstyle.skip=true
+RUN mvn -B clean package -DskipTests -Dspotless.check.skip=true -Dcheckstyle.skip=true
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Stage 2: Runtime (distroless for minimal attack surface)
@@ -26,7 +25,7 @@ FROM gcr.io/distroless/java21-debian12 AS runtime
 LABEL org.opencontainers.image.title="Enterprise API Copilot Backend"
 LABEL org.opencontainers.image.description="Spring Boot backend for Enterprise API Copilot"
 LABEL org.opencontainers.image.licenses="Apache-2.0"
-LABEL org.opencontainers.image.source="https://github.com/your-org/enterprise-api-copilot"
+LABEL org.opencontainers.image.source="https://github.com/joyrana/enterprise-api-copilot"
 
 # Non-root user (distroless uses nonroot by default)
 USER nonroot:nonroot

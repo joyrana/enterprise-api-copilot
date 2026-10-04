@@ -38,8 +38,10 @@ export function DashboardPage() {
       {/* Header */}
       <div>
         <h1 className="text-2xl font-bold text-white">Dashboard</h1>
-        <p className="text-gray-400 mt-1">
-          Your enterprise API activity at a glance.
+        <p className="text-gray-400 mt-1">Your enterprise API activity at a glance.</p>
+        <p className="text-xs text-amber-300 mt-2" role="note">
+          Metrics are not connected yet: the platform does not expose a metrics API, so these cards
+          show “—” rather than numbers. Run history is available on the History page.
         </p>
       </div>
 
@@ -85,12 +87,12 @@ export function DashboardPage() {
           <h3 className="text-sm font-semibold text-brand-300">Getting Started</h3>
         </div>
         <p className="text-sm text-gray-400 mb-4">
-          Enterprise API Copilot is in early development. The platform is being initialized.
-          Check back soon for working features.
+          Enterprise API Copilot is in early development. The platform is being initialized. Check
+          back soon for working features.
         </p>
         <div className="flex gap-3">
           <a
-            href="https://github.com/your-org/enterprise-api-copilot"
+            href="https://github.com/joyrana/enterprise-api-copilot"
             target="_blank"
             rel="noopener noreferrer"
             className="btn-primary text-sm"

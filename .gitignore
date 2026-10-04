@@ -125,6 +125,7 @@ test-results/
 *.xml
 !**/pom.xml
 !**/checkstyle*.xml
+!apps/backend/checkstyle/suppressions.xml
 !**/.checkstyle
 
 # ─── Miscellaneous ────────────────────────────────────────────────────────────
@@ -136,3 +137,9 @@ temp/
 *.orig
 *.patch
 .gradle/
+
+# Evaluation artifacts (published by CI, not committed)
+evals/reports/
+
+# Local run checkpoints (python -m ai.api)
+.copilot/

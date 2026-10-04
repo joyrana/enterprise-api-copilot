@@ -1,0 +1,20 @@
+{"dataset_version": "1.0.0", "id": "sel-001", "category": "api_selection", "input": "Is there an endpoint to issue money back to a customer?", "expected_operation_id": "refundPayment", "difficulty": "medium", "smoke": true}
+{"dataset_version": "1.0.0", "id": "sel-002", "category": "api_selection", "input": "how do I see every payment we have taken", "expected_operation_id": "listPayments", "difficulty": "easy", "smoke": true}
+{"dataset_version": "1.0.0", "id": "sel-003", "category": "api_selection", "input": "operation for authorizing a new charge", "expected_operation_id": "createPayment", "difficulty": "medium", "smoke": true}
+{"dataset_version": "1.0.0", "id": "sel-004", "category": "api_selection", "input": "void an authorized payment that hasn't been captured", "expected_operation_id": "cancelPayment", "difficulty": "medium", "smoke": false}
+{"dataset_version": "1.0.0", "id": "sel-005", "category": "api_selection", "input": "look up one payment by its id", "expected_operation_id": "getPayment", "difficulty": "easy", "smoke": false}
+{"dataset_version": "1.0.0", "id": "sel-006", "category": "api_selection", "input": "fetch a customer profile", "expected_operation_id": "getCustomer", "difficulty": "easy", "smoke": false}
+{"dataset_version": "1.0.0", "id": "sel-007", "category": "api_selection", "input": "enumerate customers for my tenant", "expected_operation_id": "listCustomers", "difficulty": "easy", "smoke": false}
+{"dataset_version": "1.0.0", "id": "sel-008", "category": "api_selection", "input": "where is my parcel - carrier and tracking number", "expected_operation_id": "getShipmentTracking", "difficulty": "hard", "smoke": true}
+{"dataset_version": "1.0.0", "id": "sel-009", "category": "api_selection", "input": "place a new order with line items", "expected_operation_id": "createOrder", "difficulty": "easy", "smoke": true}
+{"dataset_version": "1.0.0", "id": "sel-010", "category": "api_selection", "input": "list orders that were shipped", "expected_operation_id": "listOrders", "difficulty": "easy", "smoke": false}
+{"dataset_version": "1.0.0", "id": "sel-011", "category": "api_selection", "input": "retrieve a single order with its totals", "expected_operation_id": "getOrder", "difficulty": "easy", "smoke": false}
+{"dataset_version": "1.0.0", "id": "sel-012", "category": "api_selection", "input": "partial refund for a duplicate charge", "expected_operation_id": "refundPayment", "difficulty": "medium", "smoke": false}
+{"dataset_version": "1.0.0", "id": "sel-013", "category": "api_selection", "input": "filter payments by status captured", "expected_operation_id": "listPayments", "difficulty": "medium", "smoke": false}
+{"dataset_version": "1.0.0", "id": "sel-014", "category": "api_selection", "input": "charge cust_abc123 rupees", "expected_operation_id": "createPayment", "difficulty": "hard", "smoke": false}
+{"dataset_version": "1.0.0", "id": "sel-015", "category": "api_selection", "input": "cancel payment", "expected_operation_id": "cancelPayment", "difficulty": "easy", "smoke": false}
+{"dataset_version": "1.0.0", "id": "sel-016", "category": "api_selection", "input": "delivery events for an order", "expected_operation_id": "getShipmentTracking", "difficulty": "medium", "smoke": false}
+{"dataset_version": "1.0.0", "id": "sel-017", "category": "api_selection", "input": "what customers exist", "expected_operation_id": "listCustomers", "difficulty": "medium", "smoke": false}
+{"dataset_version": "1.0.0", "id": "sel-018", "category": "api_selection", "input": "create an order for SKU-1 quantity 2", "expected_operation_id": "createOrder", "difficulty": "easy", "smoke": false}
+{"dataset_version": "1.0.0", "id": "sel-019", "category": "api_selection", "input": "get refund history of a payment", "expected_operation_id": "getPayment", "difficulty": "hard", "smoke": false}
+{"dataset_version": "1.0.0", "id": "sel-020", "category": "api_selection", "input": "API to read a payment's current state", "expected_operation_id": "getPayment", "difficulty": "medium", "smoke": false}

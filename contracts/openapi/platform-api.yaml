@@ -1,0 +1,358 @@
+openapi: 3.1.0
+info:
+  title: Enterprise API Copilot — Platform API
+  version: 1.0.0
+  description: |
+    Public API consumed by the CLI and web app. Owned by the Spring Boot platform
+    (ADR-0005). Until that backend is buildable, `python -m ai.api platform` serves a
+    local reference implementation of this contract for development (ADR-0009).
+    Contract tests in `tests/contract/` run against any implementation.
+
+    All errors use the `ApiError` shape (same fields as the backend's `ApiErrorResponse`).
+servers:
+  - url: http://localhost:8080
+security:
+  - bearerAuth: []
+paths:
+  /api/v1/health:
+    get:
+      operationId: health
+      security: []
+      responses:
+        "200":
+          description: Service is up
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Health"}
+  /api/v1/auth/dev-token:
+    post:
+      operationId: issueDevToken
+      summary: Development-only login (local mode). Disabled outside local mode.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/DevTokenRequest"}
+      responses:
+        "413": {$ref: "#/components/responses/Error"}
+        "400": {$ref: "#/components/responses/Error"}
+        "200":
+          description: Token issued
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/TokenResponse"}
+        "403": {$ref: "#/components/responses/Error"}
+        "404": {$ref: "#/components/responses/Error"}
+  /api/v1/me:
+    get:
+      operationId: whoAmI
+      responses:
+        "200":
+          description: Authenticated principal
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Me"}
+        "401": {$ref: "#/components/responses/Error"}
+  /api/v1/skills:
+    get:
+      operationId: listSkills
+      responses:
+        "200":
+          description: Registered skills
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [skills]
+                properties:
+                  skills:
+                    type: array
+                    items: {$ref: "#/components/schemas/Skill"}
+        "401": {$ref: "#/components/responses/Error"}
+  /api/v1/apis/search:
+    get:
+      operationId: searchApis
+      parameters:
+        - {name: q, in: query, required: true, schema: {type: string, minLength: 1, maxLength: 500}}
+        - {name: limit, in: query, schema: {type: integer, minimum: 1, maximum: 20, default: 5}}
+      responses:
+        "200":
+          description: Ranked operations
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [results]
+                properties:
+                  results:
+                    type: array
+                    items: {$ref: "#/components/schemas/ApiSearchHit"}
+        "400": {$ref: "#/components/responses/Error"}
+        "401": {$ref: "#/components/responses/Error"}
+  /api/v1/apis/{operationId}:
+    get:
+      operationId: describeApi
+      parameters:
+        - {name: operationId, in: path, required: true, schema: {type: string, maxLength: 200}}
+      responses:
+        "401": {$ref: "#/components/responses/Error"}
+        "200":
+          description: Operation contract
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/ApiOperation"}
+        "404": {$ref: "#/components/responses/Error"}
+  /api/v1/runs:
+    get:
+      operationId: listRuns
+      parameters:
+        - {name: status, in: query, schema: {$ref: "#/components/schemas/RunStatus"}}
+        - {name: limit, in: query, schema: {type: integer, minimum: 1, maximum: 100, default: 20}}
+      responses:
+        "200":
+          description: Runs visible to the caller's tenant, newest first
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [runs]
+                properties:
+                  runs:
+                    type: array
+                    items: {$ref: "#/components/schemas/Run"}
+        "400": {$ref: "#/components/responses/Error"}
+        "401": {$ref: "#/components/responses/Error"}
+    post:
+      operationId: createRun
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/RunCreate"}
+      responses:
+        "413": {$ref: "#/components/responses/Error"}
+        "201":
+          description: Run executed until completion or a pause point
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Run"}
+        "400": {$ref: "#/components/responses/Error"}
+        "401": {$ref: "#/components/responses/Error"}
+  /api/v1/runs/{runId}:
+    get:
+      operationId: getRun
+      parameters:
+        - $ref: "#/components/parameters/RunId"
+      responses:
+        "401": {$ref: "#/components/responses/Error"}
+        "200":
+          description: The run
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Run"}
+        "404": {$ref: "#/components/responses/Error"}
+  /api/v1/runs/{runId}/approve:
+    post:
+      operationId: approveRun
+      summary: Approve the pending action. The action hash must match what was shown.
+      parameters:
+        - $ref: "#/components/parameters/RunId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/ApproveRequest"}
+      responses:
+        "401": {$ref: "#/components/responses/Error"}
+        "413": {$ref: "#/components/responses/Error"}
+        "400": {$ref: "#/components/responses/Error"}
+        "200":
+          description: Approved and resumed
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Run"}
+        "403": {$ref: "#/components/responses/Error"}
+        "404": {$ref: "#/components/responses/Error"}
+        "409": {$ref: "#/components/responses/Error"}
+  /api/v1/runs/{runId}/reject:
+    post:
+      operationId: rejectRun
+      parameters:
+        - $ref: "#/components/parameters/RunId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/RejectRequest"}
+      responses:
+        "401": {$ref: "#/components/responses/Error"}
+        "413": {$ref: "#/components/responses/Error"}
+        "400": {$ref: "#/components/responses/Error"}
+        "200":
+          description: Rejected
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Run"}
+        "403": {$ref: "#/components/responses/Error"}
+        "404": {$ref: "#/components/responses/Error"}
+        "409": {$ref: "#/components/responses/Error"}
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    RunId:
+      name: runId
+      in: path
+      required: true
+      schema: {type: string, pattern: "^run_[0-9a-f]{16}$"}
+  responses:
+    Error:
+      description: Error
+      content:
+        application/json:
+          schema: {$ref: "#/components/schemas/ApiError"}
+  schemas:
+    ApiError:
+      type: object
+      required: [code, message, requestId, path, timestamp]
+      properties:
+        code: {type: string}
+        message: {type: string}
+        requestId: {type: string}
+        path: {type: string}
+        timestamp: {type: string, format: date-time}
+    Health:
+      type: object
+      required: [status, service, version]
+      properties:
+        status: {type: string, enum: [UP, DEGRADED, DOWN]}
+        service: {type: string}
+        version: {type: string}
+        mode: {type: string}
+    DevTokenRequest:
+      type: object
+      additionalProperties: false
+      required: [subject]
+      properties:
+        subject: {type: string, minLength: 1, maxLength: 128}
+    TokenResponse:
+      type: object
+      required: [access_token, token_type, expires_in]
+      properties:
+        access_token: {type: string}
+        token_type: {type: string, enum: [Bearer]}
+        expires_in: {type: integer}
+    Me:
+      type: object
+      required: [subject, tenant_id, roles]
+      properties:
+        subject: {type: string}
+        tenant_id: {type: string}
+        roles: {type: array, items: {type: string}}
+    Skill:
+      type: object
+      required: [id, name, version, description, side_effect, required_permissions, requires_approval]
+      properties:
+        id: {type: string}
+        name: {type: string}
+        version: {type: string}
+        description: {type: string}
+        side_effect: {type: string, enum: [NONE, READ, WRITE, DESTRUCTIVE]}
+        required_permissions: {type: array, items: {type: string}}
+        requires_approval: {type: boolean}
+    ApiSearchHit:
+      type: object
+      required: [operation_id, api, method, path, summary, scopes, score, rank]
+      properties:
+        operation_id: {type: string}
+        api: {type: string}
+        method: {type: string}
+        path: {type: string}
+        summary: {type: string}
+        scopes: {type: array, items: {type: string}}
+        invocation_skill: {type: string}
+        score: {type: number}
+        rank: {type: integer, minimum: 1}
+        source_id: {type: string}
+    ApiOperation:
+      type: object
+      required: [operation_id, method, path, required_scopes, authentication, side_effect]
+      properties:
+        operation_id: {type: string}
+        api_title: {type: string}
+        api_version: {type: string}
+        method: {type: string}
+        path: {type: string}
+        summary: {type: string}
+        description: {type: string}
+        parameters: {type: array, items: {type: object}}
+        request_body_schema: {type: [object, "null"]}
+        request_body_required: {type: boolean}
+        required_scopes: {type: array, items: {type: string}}
+        authentication: {type: string}
+        responses: {type: object, additionalProperties: {type: string}}
+        requires_idempotency_key: {type: boolean}
+        invocation_skill: {type: string}
+        side_effect: {type: string, enum: [NONE, READ, WRITE, DESTRUCTIVE]}
+        deprecated: {type: boolean}
+    RunStatus:
+      type: string
+      enum: [RUNNING, AWAITING_APPROVAL, NEEDS_CLARIFICATION, COMPLETED, REJECTED, FAILED]
+    RunCreate:
+      type: object
+      additionalProperties: false
+      required: [query]
+      properties:
+        query: {type: string, minLength: 1, maxLength: 4000}
+        environment: {type: string, minLength: 1, maxLength: 64, default: sandbox}
+    PendingApproval:
+      type: object
+      required: [step_id, skill_id, action_hash, environment, summary]
+      properties:
+        step_id: {type: string}
+        skill_id: {type: string}
+        action_hash: {type: string, pattern: "^[0-9a-f]{64}$"}
+        environment: {type: string}
+        summary: {type: string}
+    TimelineEvent:
+      type: object
+      required: [kind]
+      properties:
+        kind: {type: string}
+        detail: {type: object}
+    Run:
+      type: object
+      required: [run_id, status, environment, message, requested_by, created_at, evidence, missing_fields, tool_calls, timeline]
+      properties:
+        run_id: {type: string, pattern: "^run_[0-9a-f]{16}$"}
+        status: {$ref: "#/components/schemas/RunStatus"}
+        intent: {type: [string, "null"]}
+        query: {type: string}
+        environment: {type: string}
+        message: {type: string}
+        requested_by: {type: string}
+        created_at: {type: string, format: date-time}
+        elapsed_s: {type: number}
+        evidence: {type: array, items: {type: string}}
+        missing_fields: {type: array, items: {type: string}}
+        tool_calls: {type: integer, minimum: 0}
+        pending_approval:
+          oneOf:
+            - {$ref: "#/components/schemas/PendingApproval"}
+            - {type: "null"}
+        timeline: {type: array, items: {$ref: "#/components/schemas/TimelineEvent"}}
+    ApproveRequest:
+      type: object
+      additionalProperties: false
+      required: [action_hash]
+      properties:
+        action_hash: {type: string, pattern: "^[0-9a-f]{64}$"}
+    RejectRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        reason: {type: string, maxLength: 500}

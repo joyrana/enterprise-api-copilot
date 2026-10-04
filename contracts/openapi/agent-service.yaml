@@ -1,0 +1,105 @@
+openapi: 3.1.0
+info:
+  title: Enterprise API Copilot — Agent Service (internal)
+  version: 1.0.0
+  description: |
+    Service-to-service API between the platform (caller) and the Python AI service.
+    Not exposed to end users. Every request carries a short-lived HS256 service token
+    (audience `copilot-agent`) minted by the platform; the token's claims carry the
+    end-user principal (`sub`, `tenant_id`, `roles`). The agent never accepts principal
+    data from request bodies. Approval tokens are issued by the platform's approval
+    service and passed through unchanged; the agent's runtime verifies them (ADR-0006).
+servers:
+  - url: http://localhost:8000
+security:
+  - serviceToken: []
+paths:
+  /internal/v1/health:
+    get:
+      operationId: agentHealth
+      security: []
+      responses:
+        "200":
+          description: Up
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                properties:
+                  status: {type: string, enum: [UP]}
+                  skills: {type: integer}
+  /internal/v1/runs:
+    post:
+      operationId: startRun
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [query, environment]
+              properties:
+                query: {type: string, minLength: 1, maxLength: 4000}
+                environment: {type: string, minLength: 1, maxLength: 64}
+      responses:
+        "400": {$ref: "#/components/responses/Error"}
+        "413": {$ref: "#/components/responses/Error"}
+        "201":
+          description: Run state after executing until completion or a pause point
+          content:
+            application/json:
+              schema: {$ref: "./platform-api.yaml#/components/schemas/Run"}
+        "401": {$ref: "#/components/responses/Error"}
+  /internal/v1/runs/{runId}:
+    get:
+      operationId: getAgentRun
+      parameters:
+        - {name: runId, in: path, required: true, schema: {type: string, pattern: "^run_[0-9a-f]{16}$"}}
+      responses:
+        "401": {$ref: "#/components/responses/Error"}
+        "200":
+          description: Run state
+          content:
+            application/json:
+              schema: {$ref: "./platform-api.yaml#/components/schemas/Run"}
+        "404": {$ref: "#/components/responses/Error"}
+  /internal/v1/runs/{runId}/resume:
+    post:
+      operationId: resumeRun
+      parameters:
+        - {name: runId, in: path, required: true, schema: {type: string, pattern: "^run_[0-9a-f]{16}$"}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [approval_token]
+              properties:
+                approval_token: {type: string, minLength: 10, maxLength: 4096}
+      responses:
+        "400": {$ref: "#/components/responses/Error"}
+        "401": {$ref: "#/components/responses/Error"}
+        "413": {$ref: "#/components/responses/Error"}
+        "200":
+          description: Resumed run state
+          content:
+            application/json:
+              schema: {$ref: "./platform-api.yaml#/components/schemas/Run"}
+        "404": {$ref: "#/components/responses/Error"}
+        "409": {$ref: "#/components/responses/Error"}
+components:
+  securitySchemes:
+    serviceToken:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT (HS256, aud=copilot-agent, iss=copilot-platform, exp ≤ 5 min)
+  responses:
+    Error:
+      description: Error
+      content:
+        application/json:
+          schema: {$ref: "./platform-api.yaml#/components/schemas/ApiError"}

@@ -1,0 +1,72 @@
+name: Python CI
+
+# Fast deterministic gate for the Python AI service (ADR-0008): lint, types, unit +
+# integration tests (incl. pgvector SQL), and the smoke evaluation with safety hard gates.
+# Needs no model or gateway credentials.
+
+on:
+  push:
+    branches: [main]
+    paths: ["ai/**", "skills/**", "evals/**", "sandbox/**", "tests/**", "pyproject.toml", ".github/workflows/python-ci.yml"]
+  pull_request:
+    paths: ["ai/**", "skills/**", "evals/**", "sandbox/**", "tests/**", "pyproject.toml", ".github/workflows/python-ci.yml"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: python-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.12", "3.13"]
+    services:
+      postgres:
+        image: pgvector/pgvector:0.8.1-pg17
+        env:
+          POSTGRES_DB: copilot_test
+          POSTGRES_USER: copilot
+          POSTGRES_PASSWORD: ci-only-not-a-secret
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U copilot -d copilot_test"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      COPILOT_TEST_PGURL: postgresql://copilot:ci-only-not-a-secret@localhost:5432/copilot_test
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+      - name: Install
+        # TODO(lockfile): switch to `uv sync --locked` once uv.lock is generated (PyPI was
+        # unreachable in the session that introduced this workflow; see STATUS.md).
+        run: pip install -e ".[dev,telemetry]"
+      - name: Lint
+        run: |
+          ruff check ai skills evals sandbox tests
+          ruff format --check ai skills evals sandbox tests
+      - name: Type check
+        run: mypy
+      - name: Tests
+        run: pytest -m "not live"
+      - name: Smoke evaluation (safety gates are hard failures)
+        run: python -m evals run --suite smoke --out evals/reports/smoke
+      - name: Retrieval ablation (held-out split) and judge harness
+        run: |
+          python -m evals.ablation --split test --out evals/reports/ablation-test
+          python -m evals.judge calibrate --out evals/reports/judge
+      - name: Upload evaluation report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: eval-smoke-py${{ matrix.python-version }}
+          path: evals/reports/
+          if-no-files-found: warn

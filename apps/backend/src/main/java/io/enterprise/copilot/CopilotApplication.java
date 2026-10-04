@@ -21,7 +21,7 @@ import org.springframework.boot.context.properties.ConfigurationPropertiesScan;
  *   <li>Enforces authentication, authorization, and audit logging</li>
  * </ul>
  *
- * @see <a href="https://github.com/your-org/enterprise-api-copilot">Project Repository</a>
+ * @see <a href="https://github.com/joyrana/enterprise-api-copilot">Project Repository</a>
  */
 @SpringBootApplication
 @ConfigurationPropertiesScan

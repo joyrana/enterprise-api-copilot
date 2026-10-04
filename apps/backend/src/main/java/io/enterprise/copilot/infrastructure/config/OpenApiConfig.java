@@ -37,7 +37,7 @@ public class OpenApiConfig {
                 .contact(
                     new Contact()
                         .name("Enterprise API Copilot Team")
-                        .url("https://github.com/your-org/enterprise-api-copilot")
+                        .url("https://github.com/joyrana/enterprise-api-copilot")
                         .email("team@enterprise-api-copilot.io"))
                 .license(
                     new License()

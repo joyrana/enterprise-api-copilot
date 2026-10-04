@@ -35,13 +35,13 @@ jobs:
           cache: 'maven'
 
       - name: Verify formatting (Spotless)
-        run: ./mvnw spotless:check --no-transfer-progress
+        run: mvn -B spotless:check --no-transfer-progress
 
       - name: Run Checkstyle
-        run: ./mvnw checkstyle:check --no-transfer-progress
+        run: mvn -B checkstyle:check --no-transfer-progress
 
       - name: Build and run tests
-        run: ./mvnw verify --no-transfer-progress
+        run: mvn -B verify --no-transfer-progress
 
       - name: Publish test results
         uses: dorny/test-reporter@v1
@@ -58,5 +58,5 @@ jobs:
           flags: backend
 
       - name: OWASP Dependency Check
-        run: ./mvnw dependency-check:check --no-transfer-progress
+        run: mvn -B dependency-check:check --no-transfer-progress
         continue-on-error: true
