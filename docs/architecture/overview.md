@@ -24,10 +24,10 @@ graph LR
 
 | Service | Owns | Does not own | Status |
 |---|---|---|---|
-| **Go CLI** (`apps/cli`) | Developer commands, local config, token storage, output formatting | Any business logic; never calls the AI service or gateways directly | Scaffold; Blocked (module downloads) |
-| **React app** (`apps/frontend`) | Chat/workflow UI, API explorer, approvals queue, run history, eval dashboard | Fabricated data — unavailable features are labelled | Scaffold; Blocked (npm) |
+| **Go CLI** (`apps/cli`) | Developer commands, local config, token storage, output formatting | Any business logic; never calls the AI service or gateways directly | Implemented (standard library only, ADR-0009) |
+| **React app** (`apps/frontend`) | Chat/workflow UI, API explorer, approvals queue, run history, eval dashboard | Fabricated data — unavailable features are labelled | Chat + history wired to the API; full build Blocked (npm) |
 | **Spring Boot platform** (`apps/backend`) | Identity, tenant/role context, **policy decisions**, API & skill registry metadata, run lifecycle, approval records, audit events, platform config, health | Model calls, retrieval, planning | Scaffold; Blocked (Maven Central) |
-| **Python AI service** (`ai/`, `skills/`) | Intent classification, planning, bounded execution, skill runtime (**policy enforcement point**), retrieval, model routing, evaluation instrumentation | Final authorization decisions, approval records of record | Core implemented; HTTP/LangGraph adapters Planned |
+| **Python AI service** (`ai/`, `skills/`) | Intent classification, planning, bounded execution, skill runtime (**policy enforcement point**), retrieval, model routing, evaluation instrumentation | Final authorization decisions, approval records of record | Core + HTTP APIs implemented; LangGraph adapter Blocked (PyPI) |
 | **Sandbox gateway** (`sandbox/`) | Synthetic Payments API with OAuth2 client-credentials, scopes, idempotency, tenant isolation and fault injection | Anything real | Implemented |
 | **Evaluation** (`evals/`) | Versioned datasets, deterministic evaluators, runner, reports | Production traffic | Implemented (offline) |
 
