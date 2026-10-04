@@ -1,6 +1,58 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "enterprise-api-copilot-ai"
+version = "0.2.0.dev0"
+description = "Python AI service for Enterprise API Copilot: agent runtime, skill runtime, retrieval and evaluation."
+readme = "README.md"
+license = { text = "Apache-2.0" }
+requires-python = ">=3.12,<3.14"
+# Core runtime: only what the framework-independent core imports today.
+# Versions researched 2026-10-03, see docs/architecture/technology-baseline.md.
+dependencies = [
+    "pydantic>=2.13,<3",
+    "httpx>=0.28,<0.29",
+    "PyJWT>=2.10,<3",
+    "PyYAML>=6.0,<7",
+    "jsonschema>=4.23,<5",
+    "numpy>=2.1,<3",
+    "mcp>=2.2,<3",
+    "starlette>=1.0,<2",
+    "uvicorn>=0.35,<1",
+]
+
+[project.optional-dependencies]
+# Orchestration and service adapters (Phase 4). Not installable in the session that
+# produced this file because PyPI was unreachable; see docs/implementation/STATUS.md.
+orchestration = [
+    "langgraph>=1.2,<2",
+    "langgraph-checkpoint-postgres>=2,<4",
+    "fastapi>=0.120,<1",
+]
+postgres = ["psycopg[binary]>=3.3,<4"]
+telemetry = ["opentelemetry-api>=1.44,<2", "opentelemetry-sdk>=1.44,<2"]
+anthropic = ["anthropic>=1.0,<2"]
+openai = ["openai>=2,<4"]
+dev = [
+    "pytest>=9,<10",
+    "ruff>=0.16,<0.17",
+    "mypy>=1.18",
+]
+
+[tool.setuptools.packages.find]
+include = ["ai*", "skills*", "evals*", "sandbox*"]
+
+[tool.setuptools.package-data]
+"*" = ["*.yaml", "*.jsonl", "*.md", "*.sql"]
+
 [tool.ruff]
 target-version = "py312"
 line-length = 100
+extend-exclude = [".venv", "apps", "docs"]
+
+[tool.ruff.lint]
 select = [
     "E",   # pycodestyle errors
     "W",   # pycodestyle warnings
@@ -9,29 +61,46 @@ select = [
     "B",   # flake8-bugbear
     "C4",  # flake8-comprehensions
     "UP",  # pyupgrade
-    "ANN", # flake8-annotations
     "S",   # bandit security
     "N",   # pep8-naming
+    "RUF", # ruff-specific
 ]
 ignore = [
-    "ANN101", # Missing type annotation for `self`
-    "ANN102", # Missing type annotation for `cls`
-    "S101",   # Use of assert (allowed in tests)
-]
-exclude = [
-    ".venv",
-    "__pycache__",
+    "RUF012",
+    # PEP 695 generics are a style choice; explicit TypeVars keep the skill contract readable.
+    "UP046",
+    "UP047",
 ]
 
-[tool.ruff.per-file-ignores]
-"**/test_*.py" = ["S", "ANN"]
-"**/tests/**" = ["S", "ANN"]
+[tool.ruff.lint.per-file-ignores]
+# Tests: asserts, fixed-argument subprocess calls to local toolchains (javac/node/psql), SQL
+# built from controlled fixtures.
+"tests/**" = ["S101", "S105", "S106", "S108", "S603", "S607", "S608", "E501"]
+# Seeded PRNG for bootstrap resampling (not security); fixed-argument `git` calls.
+"evals/**" = ["S311", "S603", "S607"]
+# Regex tables and Markdown table rows read better unwrapped.
+"ai/agent/intent.py" = ["E501"]
+"ai/knowledge/context.py" = ["E501"]
+"evals/report.py" = ["E501"]
+"evals/ablation.py" = ["E501"]
+# Natural-language templates and the judge rubric prompt.
+"evals/corpora/generate_v2.py" = ["E501"]
+"evals/judge.py" = ["E501"]
 
-[tool.black]
-line-length = 100
-target-version = ["py312"]
+[tool.mypy]
+python_version = "3.12"
+strict = true
+warn_unused_ignores = true
+packages = ["ai", "skills", "evals", "sandbox"]
+
+[[tool.mypy.overrides]]
+module = ["yaml", "mcp.*", "mcp_types.*", "starlette.*", "uvicorn", "jsonschema", "jsonschema.*"]
+ignore_missing_imports = true
 
 [tool.pytest.ini_options]
-asyncio_mode = "auto"
-testpaths = ["ai", "skills", "agents"]
-addopts = "--cov=. --cov-report=xml --cov-report=term-missing"
+testpaths = ["tests"]
+addopts = "-ra --strict-markers"
+markers = [
+    "integration: needs a local service such as PostgreSQL (skipped when unavailable)",
+    "live: calls an external service; opt-in via COPILOT_LIVE_TESTS=1",
+]

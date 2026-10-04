@@ -1,0 +1,192 @@
+# Synthetic API for local development, tests and evaluation. Not a real service.
+openapi: 3.1.0
+info:
+  title: Synthetic Payments API
+  version: "1.4.0"
+  description: Create, read, refund and cancel sandbox payments and customers.
+servers:
+  # Informational only. The copilot never uses spec servers for execution (threat model T2).
+  - url: https://payments.sandbox.example.invalid
+security:
+  - oauth2: [payments:read]
+paths:
+  /v1/payments:
+    get:
+      operationId: listPayments
+      summary: List payments
+      description: Returns payments for the calling tenant, newest first. Supports filtering by status and customer.
+      tags: [payments]
+      security:
+        - oauth2: [payments:read]
+      parameters:
+        - $ref: "#/components/parameters/Limit"
+        - name: status
+          in: query
+          description: Filter by payment status
+          schema: {type: string, enum: [authorized, captured, refunded, cancelled]}
+        - name: customer_id
+          in: query
+          description: Filter by customer identifier
+          schema: {type: string, pattern: "^cust_[a-z0-9]{6,}$"}
+      responses:
+        "200": {description: A page of payments}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "403": {$ref: "#/components/responses/Forbidden"}
+    post:
+      operationId: createPayment
+      summary: Create a payment
+      description: Authorizes a new payment for a customer. Requires an Idempotency-Key header; retries with the same key return the original payment.
+      tags: [payments]
+      security:
+        - oauth2: [payments:write]
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/PaymentCreate"}
+      responses:
+        "201": {description: Payment created}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "403": {$ref: "#/components/responses/Forbidden"}
+        "409": {description: Idempotency key reused with a different request body}
+        "422": {description: Validation error, for example amount below minimum or unsupported currency}
+        "429": {description: Rate limit exceeded; retry after the Retry-After header}
+  /v1/payments/{payment_id}:
+    parameters:
+      - $ref: "#/components/parameters/PaymentId"
+    get:
+      operationId: getPayment
+      summary: Retrieve a payment
+      description: Fetch a single payment by identifier, including status and refund history.
+      tags: [payments]
+      security:
+        - oauth2: [payments:read]
+      responses:
+        "200": {description: The payment}
+        "404": {description: Payment not found for this tenant}
+    delete:
+      operationId: cancelPayment
+      summary: Cancel an authorized payment
+      description: Cancels a payment that has not been captured. Cancelled payments cannot be reinstated.
+      tags: [payments]
+      security:
+        - oauth2: [payments:write]
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      responses:
+        "200": {description: Payment cancelled}
+        "404": {description: Payment not found}
+        "409": {description: Payment already captured or cancelled}
+  /v1/payments/{payment_id}/refunds:
+    parameters:
+      - $ref: "#/components/parameters/PaymentId"
+    post:
+      operationId: refundPayment
+      summary: Refund a payment
+      description: Issues a full or partial refund for a captured or authorized payment. Requires the refunds:write scope.
+      tags: [refunds]
+      security:
+        - oauth2: [refunds:write]
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/RefundCreate"}
+      responses:
+        "201": {description: Refund created}
+        "403": {description: Token lacks the refunds:write scope}
+        "422": {description: Refund amount exceeds the refundable balance}
+  /v1/customers:
+    get:
+      operationId: listCustomers
+      summary: List customers
+      description: Returns customers for the calling tenant.
+      tags: [customers]
+      security:
+        - oauth2: [customers:read]
+      parameters:
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200": {description: A page of customers}
+  /v1/customers/{customer_id}:
+    get:
+      operationId: getCustomer
+      summary: Retrieve a customer
+      description: Fetch a customer profile by identifier.
+      tags: [customers]
+      security:
+        - oauth2: [customers:read]
+      parameters:
+        - name: customer_id
+          in: path
+          required: true
+          schema: {type: string, pattern: "^cust_[a-z0-9]{6,}$"}
+      responses:
+        "200": {description: The customer}
+        "404": {description: Customer not found}
+components:
+  securitySchemes:
+    oauth2:
+      type: oauth2
+      flows:
+        clientCredentials:
+          tokenUrl: https://payments.sandbox.example.invalid/oauth/token
+          scopes:
+            payments:read: Read payments
+            payments:write: Create and cancel payments
+            refunds:write: Create refunds
+            customers:read: Read customers
+  parameters:
+    Limit:
+      name: limit
+      in: query
+      description: Maximum number of items to return (1-100)
+      schema: {type: integer, minimum: 1, maximum: 100, default: 20}
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: Unique key that makes retries safe
+      schema: {type: string, maxLength: 128}
+    PaymentId:
+      name: payment_id
+      in: path
+      required: true
+      description: Payment identifier
+      schema: {type: string, pattern: "^pay_[A-Za-z0-9]{8,}$"}
+  responses:
+    Unauthorized:
+      description: Missing, expired or invalid access token
+    Forbidden:
+      description: Token is valid but lacks the required scope
+  schemas:
+    PaymentCreate:
+      type: object
+      additionalProperties: false
+      required: [amount, currency, customer_id]
+      properties:
+        amount:
+          type: integer
+          minimum: 100
+          maximum: 10000000
+          description: Amount in the smallest currency unit (paise for INR)
+        currency:
+          type: string
+          enum: [INR, USD, EUR]
+        customer_id:
+          type: string
+          pattern: "^cust_[a-z0-9]{6,}$"
+        description:
+          type: string
+          maxLength: 200
+    RefundCreate:
+      type: object
+      additionalProperties: false
+      required: [amount]
+      properties:
+        amount: {type: integer, minimum: 1}
+        reason: {type: string, enum: [requested_by_customer, duplicate, fraudulent]}

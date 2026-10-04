@@ -2,7 +2,7 @@
   "name": "enterprise-api-copilot-frontend",
   "version": "0.1.0",
   "private": true,
-  "description": "Enterprise API Copilot – React Frontend",
+  "description": "Enterprise API Copilot \u2013 React Frontend",
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
@@ -14,7 +14,8 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "format": "prettier --write \"src/**/*.{ts,tsx,css,md}\"",
-    "format:check": "prettier --check \"src/**/*.{ts,tsx,css,md}\""
+    "format:check": "prettier --check \"src/**/*.{ts,tsx,css,md}\"",
+    "test:node": "node --test src/api/client.nodetest.ts"
   },
   "dependencies": {
     "react": "^18.3.1",

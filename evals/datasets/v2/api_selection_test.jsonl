@@ -1,0 +1,12 @@
+{"dataset_version": "2.0.0", "id": "v2-sel-001", "split": "test", "category": "api_selection", "input": "endpoint that bills a client card for a purchase", "expected_operation_id": "createPayment", "difficulty": "hard"}
+{"dataset_version": "2.0.0", "id": "v2-sel-003", "split": "test", "category": "api_selection", "input": "where's my package right now", "expected_operation_id": "getShipmentTracking", "difficulty": "hard"}
+{"dataset_version": "2.0.0", "id": "v2-sel-005", "split": "test", "category": "api_selection", "input": "browse all of our buyers", "expected_operation_id": "listCustomers", "difficulty": "hard"}
+{"dataset_version": "2.0.0", "id": "v2-sel-007", "split": "test", "category": "api_selection", "input": "pull up a single transaction", "expected_operation_id": "getPayment", "difficulty": "hard"}
+{"dataset_version": "2.0.0", "id": "v2-sel-009", "split": "test", "category": "api_selection", "input": "submitting a purchase order with several products", "expected_operation_id": "createOrder", "difficulty": "hard"}
+{"dataset_version": "2.0.0", "id": "v2-sel-011", "split": "test", "category": "api_selection", "input": "orders awaiting dispatch", "expected_operation_id": "listOrders", "difficulty": "hard"}
+{"dataset_version": "2.0.0", "id": "v2-sel-013", "split": "test", "category": "api_selection", "input": "authorizing a new transaction for a client", "expected_operation_id": "createPayment", "difficulty": "hard"}
+{"dataset_version": "2.0.0", "id": "v2-sel-015", "split": "test", "category": "api_selection", "input": "cancelling an uncaptured transaction", "expected_operation_id": "cancelPayment", "difficulty": "hard"}
+{"dataset_version": "2.0.0", "id": "v2-sel-017", "split": "test", "category": "api_selection", "input": "retrieving a customer's profile record", "expected_operation_id": "getCustomer", "difficulty": "hard"}
+{"dataset_version": "2.0.0", "id": "v2-sel-019", "split": "test", "category": "api_selection", "input": "placing an order for items", "expected_operation_id": "createOrder", "difficulty": "hard"}
+{"dataset_version": "2.0.0", "id": "v2-sel-021", "split": "test", "category": "api_selection", "input": "returned or shipped orders overview", "expected_operation_id": "listOrders", "difficulty": "hard"}
+{"dataset_version": "2.0.0", "id": "v2-sel-023", "split": "test", "category": "api_selection", "input": "fetching a transaction's refund history", "expected_operation_id": "getPayment", "difficulty": "hard"}

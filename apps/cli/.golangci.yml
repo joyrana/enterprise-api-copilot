@@ -1,55 +1,19 @@
-linters:
-  default: false
-
-linters-settings:
-  errcheck:
-    check-type-assertions: true
-    check-blank: true
-  gofmt:
-    simplify: true
-  govet:
-    enable-all: true
-  revive:
-    severity: warning
-    rules:
-      - name: exported
-      - name: error-return
-      - name: error-naming
-      - name: error-strings
-      - name: var-naming
-  godot:
-    scope: declarations
-  misspell:
-    locale: US
-
-linters:
-  enable:
-    - errcheck
-    - gosimple
-    - govet
-    - ineffassign
-    - staticcheck
-    - unused
-    - gofmt
-    - goimports
-    - misspell
-    - revive
-    - gocritic
-    - godot
-    - cyclop
-    - funlen
-    - wrapcheck
-
-issues:
-  exclude-rules:
-    - path: _test\.go
-      linters:
-        - errcheck
-        - wrapcheck
-        - funlen
-  max-issues-per-linter: 0
-  max-same-issues: 0
-
+# golangci-lint v2 configuration (the previous file was v1 format with duplicate keys).
+# Not executed in the session that wrote it (no module proxy access); CI runs it.
+version: "2"
 run:
   timeout: 5m
-  go: "1.22"
+linters:
+  default: standard        # errcheck, govet, ineffassign, staticcheck, unused
+  enable:
+    - gosec
+    - misspell
+    - revive
+    - bodyclose
+    - errorlint
+  exclusions:
+    rules:
+      - path: _test\.go
+        linters: [gosec, errcheck]
+formatters:
+  enable: [gofmt, goimports]

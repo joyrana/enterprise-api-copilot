@@ -1,1 +1,0 @@
-"""GitHub automation skill group."""

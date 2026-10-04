@@ -1,0 +1,3 @@
+# Loyalty: Pagination
+
+List endpoints in the Loyalty API use cursor pagination. The page size defaults to 25 and cannot exceed 200. Pass the next_cursor value to fetch the following page.

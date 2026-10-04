@@ -1,0 +1,12 @@
+{"dataset_version": "2.0.0", "id": "v2-sel-000", "split": "dev", "category": "api_selection", "input": "I need to give a shopper their money back", "expected_operation_id": "refundPayment", "difficulty": "hard"}
+{"dataset_version": "2.0.0", "id": "v2-sel-002", "split": "dev", "category": "api_selection", "input": "charging a customer", "expected_operation_id": "createPayment", "difficulty": "hard"}
+{"dataset_version": "2.0.0", "id": "v2-sel-004", "split": "dev", "category": "api_selection", "input": "show the details stored about one buyer", "expected_operation_id": "getCustomer", "difficulty": "hard"}
+{"dataset_version": "2.0.0", "id": "v2-sel-006", "split": "dev", "category": "api_selection", "input": "void a charge before settlement", "expected_operation_id": "cancelPayment", "difficulty": "hard"}
+{"dataset_version": "2.0.0", "id": "v2-sel-008", "split": "dev", "category": "api_selection", "input": "see transactions that were refunded", "expected_operation_id": "listPayments", "difficulty": "hard"}
+{"dataset_version": "2.0.0", "id": "v2-sel-010", "split": "dev", "category": "api_selection", "input": "check one order and what's in it", "expected_operation_id": "getOrder", "difficulty": "hard"}
+{"dataset_version": "2.0.0", "id": "v2-sel-012", "split": "dev", "category": "api_selection", "input": "reversing funds for a disputed duplicate", "expected_operation_id": "refundPayment", "difficulty": "hard"}
+{"dataset_version": "2.0.0", "id": "v2-sel-014", "split": "dev", "category": "api_selection", "input": "carrier status for a delivery", "expected_operation_id": "getShipmentTracking", "difficulty": "hard"}
+{"dataset_version": "2.0.0", "id": "v2-sel-016", "split": "dev", "category": "api_selection", "input": "customer directory listing", "expected_operation_id": "listCustomers", "difficulty": "hard"}
+{"dataset_version": "2.0.0", "id": "v2-sel-018", "split": "dev", "category": "api_selection", "input": "list of all transactions processed", "expected_operation_id": "listPayments", "difficulty": "hard"}
+{"dataset_version": "2.0.0", "id": "v2-sel-020", "split": "dev", "category": "api_selection", "input": "look up one order by id", "expected_operation_id": "getOrder", "difficulty": "hard"}
+{"dataset_version": "2.0.0", "id": "v2-sel-022", "split": "dev", "category": "api_selection", "input": "refunding part of a captured charge", "expected_operation_id": "refundPayment", "difficulty": "hard"}

@@ -1,1 +1,0 @@
-"""SDK generation skill module."""
