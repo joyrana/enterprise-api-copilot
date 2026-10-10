@@ -18,14 +18,14 @@ import lombok.Value;
 public class HealthResponse {
 
   /** Overall service status. Values: {@code UP}, {@code DEGRADED}, {@code DOWN}. */
-  String status;
+  private String status;
 
   /** Service identifier. */
-  String service;
+  private String service;
 
   /** Semantic version of the deployed artifact. */
-  String version;
+  private String version;
 
   /** Timestamp when the health check was performed. */
-  Instant timestamp;
+  private Instant timestamp;
 }

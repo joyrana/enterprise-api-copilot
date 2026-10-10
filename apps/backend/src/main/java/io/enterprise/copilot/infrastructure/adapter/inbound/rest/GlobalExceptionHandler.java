@@ -6,9 +6,9 @@
  */
 package io.enterprise.copilot.infrastructure.adapter.inbound.rest;
 
-import io.enterprise.copilot.infrastructure.adapter.inbound.rest.dto.ApiErrorResponse;
 import io.enterprise.copilot.domain.exception.ResourceNotFoundException;
 import io.enterprise.copilot.domain.exception.ValidationException;
+import io.enterprise.copilot.infrastructure.adapter.inbound.rest.dto.ApiErrorResponse;
 import jakarta.servlet.http.HttpServletRequest;
 import java.time.Instant;
 import java.util.UUID;
@@ -32,18 +32,39 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 @Slf4j
 public class GlobalExceptionHandler {
 
+  /**
+   * Maps a missing resource to 404 {@code RESOURCE_NOT_FOUND}.
+   *
+   * @param ex the exception raised by the controller
+   * @param request the request that failed
+   * @return the error response
+   */
   @ExceptionHandler(ResourceNotFoundException.class)
   public ResponseEntity<ApiErrorResponse> handleNotFound(
       ResourceNotFoundException ex, HttpServletRequest request) {
     return buildError(HttpStatus.NOT_FOUND, "RESOURCE_NOT_FOUND", ex.getMessage(), request);
   }
 
+  /**
+   * Maps a domain validation failure to 400 {@code VALIDATION_ERROR}.
+   *
+   * @param ex the exception raised by the controller
+   * @param request the request that failed
+   * @return the error response
+   */
   @ExceptionHandler(ValidationException.class)
   public ResponseEntity<ApiErrorResponse> handleValidation(
       ValidationException ex, HttpServletRequest request) {
     return buildError(HttpStatus.BAD_REQUEST, "VALIDATION_ERROR", ex.getMessage(), request);
   }
 
+  /**
+   * Maps request-body validation errors to 400 {@code VALIDATION_ERROR}, listing each field.
+   *
+   * @param ex the exception raised by the controller
+   * @param request the request that failed
+   * @return the error response
+   */
   @ExceptionHandler(MethodArgumentNotValidException.class)
   public ResponseEntity<ApiErrorResponse> handleMethodArgumentNotValid(
       MethodArgumentNotValidException ex, HttpServletRequest request) {
@@ -61,25 +82,48 @@ public class GlobalExceptionHandler {
     return buildError(HttpStatus.BAD_REQUEST, "VALIDATION_ERROR", message, request);
   }
 
+  /**
+   * Maps a missing or invalid credential to 401 {@code UNAUTHENTICATED}.
+   *
+   * @param ex the exception raised by the controller
+   * @param request the request that failed
+   * @return the error response
+   */
   @ExceptionHandler(AuthenticationException.class)
   public ResponseEntity<ApiErrorResponse> handleAuthentication(
       AuthenticationException ex, HttpServletRequest request) {
-    return buildError(HttpStatus.UNAUTHORIZED, "UNAUTHENTICATED", "Authentication required",
-        request);
+    return buildError(
+        HttpStatus.UNAUTHORIZED, "UNAUTHENTICATED", "Authentication required", request);
   }
 
+  /**
+   * Maps an authorization failure to 403 {@code ACCESS_DENIED}.
+   *
+   * @param ex the exception raised by the controller
+   * @param request the request that failed
+   * @return the error response
+   */
   @ExceptionHandler(AccessDeniedException.class)
   public ResponseEntity<ApiErrorResponse> handleAccessDenied(
       AccessDeniedException ex, HttpServletRequest request) {
-    return buildError(HttpStatus.FORBIDDEN, "ACCESS_DENIED",
-        "You do not have permission to perform this action", request);
+    return buildError(
+        HttpStatus.FORBIDDEN,
+        "ACCESS_DENIED",
+        "You do not have permission to perform this action",
+        request);
   }
 
+  /**
+   * Maps any unhandled exception to 500 {@code INTERNAL_ERROR} without exposing details.
+   *
+   * @param ex the exception raised by the controller
+   * @param request the request that failed
+   * @return the error response
+   */
   @ExceptionHandler(Exception.class)
-  public ResponseEntity<ApiErrorResponse> handleGeneric(
-      Exception ex, HttpServletRequest request) {
-    log.error("Unhandled exception on request {} {}", request.getMethod(),
-        request.getRequestURI(), ex);
+  public ResponseEntity<ApiErrorResponse> handleGeneric(Exception ex, HttpServletRequest request) {
+    log.error(
+        "Unhandled exception on request {} {}", request.getMethod(), request.getRequestURI(), ex);
     return buildError(
         HttpStatus.INTERNAL_SERVER_ERROR,
         "INTERNAL_ERROR",
@@ -90,16 +134,21 @@ public class GlobalExceptionHandler {
   private ResponseEntity<ApiErrorResponse> buildError(
       HttpStatus status, String code, String message, HttpServletRequest request) {
     String requestId = UUID.randomUUID().toString();
-    log.warn("Returning error: status={} code={} requestId={} path={}",
-        status.value(), code, requestId, request.getRequestURI());
+    log.warn(
+        "Returning error: status={} code={} requestId={} path={}",
+        status.value(),
+        code,
+        requestId,
+        request.getRequestURI());
 
-    return ResponseEntity.status(status).body(
-        ApiErrorResponse.builder()
-            .code(code)
-            .message(message)
-            .requestId(requestId)
-            .path(request.getRequestURI())
-            .timestamp(Instant.now())
-            .build());
+    return ResponseEntity.status(status)
+        .body(
+            ApiErrorResponse.builder()
+                .code(code)
+                .message(message)
+                .requestId(requestId)
+                .path(request.getRequestURI())
+                .timestamp(Instant.now())
+                .build());
   }
 }

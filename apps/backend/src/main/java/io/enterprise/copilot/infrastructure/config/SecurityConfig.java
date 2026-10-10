@@ -23,11 +23,12 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
  * Spring Security configuration.
  *
  * <p>Configures:
+ *
  * <ul>
- *   <li>Stateless JWT-based authentication (OAuth 2.0 resource server)</li>
- *   <li>CORS with configurable allowed origins</li>
- *   <li>Public paths: health check, actuator, Swagger UI</li>
- *   <li>All other paths require authentication</li>
+ *   <li>Stateless JWT-based authentication (OAuth 2.0 resource server)
+ *   <li>CORS with configurable allowed origins
+ *   <li>Public paths: health check, actuator, Swagger UI
+ *   <li>All other paths require authentication
  * </ul>
  */
 @Configuration
@@ -46,24 +47,32 @@ public class SecurityConfig {
     "/swagger-ui.html"
   };
 
+  /**
+   * Builds the HTTP security filter chain: stateless sessions, CORS, public paths open and
+   * everything else authenticated.
+   *
+   * @param http the security builder supplied by Spring
+   * @return the configured filter chain
+   * @throws Exception if the chain cannot be built
+   */
   @Bean
   public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
-    return http
-        .csrf(AbstractHttpConfigurer::disable)
+    return http.csrf(AbstractHttpConfigurer::disable)
         .cors(cors -> cors.configurationSource(corsConfigurationSource()))
         .sessionManagement(
             session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
         .authorizeHttpRequests(
-            auth ->
-                auth.requestMatchers(PUBLIC_PATHS)
-                    .permitAll()
-                    .anyRequest()
-                    .authenticated())
+            auth -> auth.requestMatchers(PUBLIC_PATHS).permitAll().anyRequest().authenticated())
         // TODO(#10): Enable JWT resource server once Apigee JWK URI is configured
         // .oauth2ResourceServer(oauth2 -> oauth2.jwt(Customizer.withDefaults()))
         .build();
   }
 
+  /**
+   * CORS policy for {@code /api/**}, limited to the configured allowed origins.
+   *
+   * @return the CORS configuration source
+   */
   @Bean
   public CorsConfigurationSource corsConfigurationSource() {
     CorsConfiguration configuration = new CorsConfiguration();

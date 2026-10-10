@@ -18,17 +18,17 @@ import lombok.Value;
 public class ApiErrorResponse {
 
   /** Machine-readable error code (e.g., {@code RESOURCE_NOT_FOUND}). */
-  String code;
+  private String code;
 
   /** Human-readable error message safe for display to end users. */
-  String message;
+  private String message;
 
   /** Unique identifier for this request — use for support correlation. */
-  String requestId;
+  private String requestId;
 
   /** The request path that triggered the error. */
-  String path;
+  private String path;
 
   /** Timestamp when the error occurred. */
-  Instant timestamp;
+  private Instant timestamp;
 }

@@ -1,0 +1,35 @@
+name: Generate frontend lockfile (one-off)
+
+# Temporary: the session that fixed CI could not reach the npm registry, so this generates
+# apps/frontend/package-lock.json on a runner and commits it back to the fix branch.
+# Removed in the next commit on that branch.
+
+on:
+  push:
+    branches: [fix/ci-build]
+    paths: [".github/workflows/tmp-generate-lockfile.yml"]
+
+permissions:
+  contents: write
+
+jobs:
+  lockfile:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.ref }}
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "22"
+      - name: Generate package-lock.json
+        working-directory: apps/frontend
+        run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+      - name: Commit lockfile
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add apps/frontend/package-lock.json
+          git commit -m "Add frontend package-lock.json (generated on a GitHub runner)"
+          git push origin HEAD:${{ github.ref_name }}

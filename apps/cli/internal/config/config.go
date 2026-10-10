@@ -56,7 +56,8 @@ func Load(path string) (Config, error) {
 		if runtime.GOOS != "windows" && info.Mode().Perm()&0o077 != 0 {
 			return cfg, fmt.Errorf("config %s is readable by other users (mode %v); run: chmod 600 %s", path, info.Mode().Perm(), path)
 		}
-		raw, err := os.ReadFile(path)
+		// The path is chosen by the user (--config or the default location), not by remote input.
+		raw, err := os.ReadFile(filepath.Clean(path))
 		if err != nil {
 			return cfg, fmt.Errorf("read config: %w", err)
 		}
