@@ -24,6 +24,11 @@ import org.springframework.context.annotation.Configuration;
 @Configuration
 public class OpenApiConfig {
 
+  /**
+   * Describes the service for the generated OpenAPI document and Swagger UI.
+   *
+   * @return the OpenAPI metadata bean
+   */
   @Bean
   public OpenAPI openAPI() {
     return new OpenAPI()

@@ -102,7 +102,7 @@ func Run(args []string, streams IO) int {
 		return a.fail(usagef("%v", err))
 	}
 	if *help || global.NArg() == 0 {
-		fmt.Fprint(streams.Out, usage)
+		_, _ = fmt.Fprint(streams.Out, usage)
 		return ExitOK
 	}
 	format, err := output.ParseFormat(*formatFlag)
@@ -131,10 +131,10 @@ func Run(args []string, streams IO) int {
 func (a *app) fail(err error) int {
 	var ue usageError
 	if errors.As(err, &ue) {
-		fmt.Fprintf(a.io.Err, "error: %s\nRun 'copilot --help' for usage.\n", ue.msg)
+		_, _ = fmt.Fprintf(a.io.Err, "error: %s\nRun 'copilot --help' for usage.\n", ue.msg)
 		return ExitUsage
 	}
-	fmt.Fprintf(a.io.Err, "error: %v\n", err)
+	_, _ = fmt.Fprintf(a.io.Err, "error: %v\n", err)
 	return ExitError
 }
 
@@ -227,7 +227,7 @@ func (a *app) client(requireToken bool) (*client.Client, config.Config, error) {
 }
 
 func (a *app) printf(format string, args ...any) {
-	fmt.Fprintf(a.io.Out, format, args...)
+	_, _ = fmt.Fprintf(a.io.Out, format, args...)
 }
 
 func (a *app) version(args []string) (int, error) {

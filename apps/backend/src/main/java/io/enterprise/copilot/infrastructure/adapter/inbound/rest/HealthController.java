@@ -19,14 +19,15 @@ import org.springframework.web.bind.annotation.RestController;
  * Public health check endpoint.
  *
  * <p>This endpoint is intentionally unauthenticated and is used by:
+ *
  * <ul>
- *   <li>Kubernetes liveness and readiness probes</li>
- *   <li>Load balancer health checks</li>
- *   <li>CLI {@code copilot doctor} command</li>
+ *   <li>Kubernetes liveness and readiness probes
+ *   <li>Load balancer health checks
+ *   <li>CLI {@code copilot doctor} command
  * </ul>
  *
- * <p>For detailed health information (database, redis, agents), see Spring Actuator at
- * {@code /actuator/health}.
+ * <p>For detailed health information (database, redis, agents), see Spring Actuator at {@code
+ * /actuator/health}.
  */
 @RestController
 @RequestMapping("/api/v1")
