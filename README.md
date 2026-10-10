@@ -10,7 +10,7 @@
 [![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 
 > [!WARNING]
-> **Pre-release (0.2.0.dev).** The Python agent and skill runtime, the platform API's reference implementation and the Go CLI are implemented and tested. The Spring Boot backend, the full React build and the container images are **not built or verified yet**. Do not point this at production APIs. See [Project status](#project-status) for the evidence behind every claim.
+> **Pre-release (0.2.0.dev).** Every component now builds and passes CI, including the React production build and the backend, frontend and CLI container images. The Spring Boot backend is still a scaffold (health endpoint only); the platform API runs on the Python reference implementation. Do not point this at production APIs yet. See [Project status](#project-status) for the evidence behind every claim.
 
 ---
 
@@ -99,10 +99,12 @@ Status reflects code **with tests** in this repository. Full evidence, blockers 
 | Durable state: runs, single-use approvals, idempotency | ✅ SQLite (survives restarts and concurrent processes) · PostgreSQL driver pending |
 | Tracing: W3C `traceparent` from API → agent → skill → gateway | ✅ Implemented · OTel exporter pending |
 | Go CLI | ✅ Implemented (standard library only), tested end to end |
-| React web app: chat with approvals, run history | 🟡 Wired to the real API, client tested · npm build pending |
-| Spring Boot backend, Helm chart, container images | 🚧 Scaffold / unverified |
+| React web app: chat with approvals, run history | ✅ Wired to the real API; lint, type check, tests and production build pass in CI · component and accessibility tests pending |
+| Spring Boot backend | 🟡 Builds and passes CI (formatting, Checkstyle, unit tests) · scaffold only: platform API not implemented yet |
+| Container images (backend, frontend, CLI) | ✅ Built and Trivy-scanned in CI |
+| Helm chart | 🚧 Scaffold / unverified |
 
-Why some parts are pending: the environment these were built in blocked the PyPI, npm, Maven and Go package registries and had no Docker daemon. Nothing listed as pending has been claimed as working.
+Why some parts are pending: the environment these were built in blocked the PyPI, npm, Maven and Go package registries and had no Docker daemon, so builds that need them are verified in GitHub Actions instead. Nothing listed as pending has been claimed as working.
 
 ## Architecture
 
@@ -293,11 +295,11 @@ Conventions:
 
 Next steps, in order (details in [STATUS.md](docs/implementation/STATUS.md#exact-next-step)):
 
-1. Lockfiles (`uv.lock`, `package-lock.json`, Maven wrapper) and PostgreSQL driver for the runtime store
+1. Remaining lockfiles (`uv.lock`, Maven wrapper) and PostgreSQL driver for the runtime store
 2. LangGraph adapter with a PostgreSQL checkpointer
 3. Spring Boot 4 implementation of the platform API, verified against the existing contract tests
-4. Web app production build, component and accessibility tests, live evaluation dashboard
-5. OpenTelemetry export, dashboards and verified container images
+4. Web app component and accessibility tests, live evaluation dashboard
+5. OpenTelemetry export and dashboards
 6. Live LLM-judge calibration with independently labelled items
 
 ## Contributing, security and license
