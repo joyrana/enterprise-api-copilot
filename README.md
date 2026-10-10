@@ -9,9 +9,6 @@
 ![Go 1.22+](https://img.shields.io/badge/go-1.22%2B-00ADD8)
 [![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 
-> [!WARNING]
-> **Pre-release (0.2.0.dev).** Every component now builds and passes CI, including the React production build and the backend, frontend and CLI container images. The Spring Boot backend is still a scaffold (health endpoint only); the platform API runs on the Python reference implementation. Do not point this at production APIs yet. See [Project status](#project-status) for the evidence behind every claim.
-
 ---
 
 ## Contents
