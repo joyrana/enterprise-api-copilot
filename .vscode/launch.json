@@ -1,0 +1,107 @@
+{
+  // Python services: start them with `./dev.sh --debug` (add `--wait` to break on start-up
+  // code) and use an "Attach" config, or run one directly with a "Launch" config.
+  // Needs the Python Debugger extension (ms-python.debugpy); see .vscode/extensions.json.
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Attach: sandbox (5678)",
+      "type": "debugpy",
+      "request": "attach",
+      "connect": { "host": "127.0.0.1", "port": 5678 },
+      "pathMappings": [{ "localRoot": "${workspaceFolder}", "remoteRoot": "${workspaceFolder}" }],
+      "justMyCode": true
+    },
+    {
+      "name": "Attach: platform (5679)",
+      "type": "debugpy",
+      "request": "attach",
+      "connect": { "host": "127.0.0.1", "port": 5679 },
+      "pathMappings": [{ "localRoot": "${workspaceFolder}", "remoteRoot": "${workspaceFolder}" }],
+      "justMyCode": true
+    },
+    {
+      "name": "Attach: agent (5680)",
+      "type": "debugpy",
+      "request": "attach",
+      "connect": { "host": "127.0.0.1", "port": 5680 },
+      "pathMappings": [{ "localRoot": "${workspaceFolder}", "remoteRoot": "${workspaceFolder}" }],
+      "justMyCode": true
+    },
+    {
+      "name": "Launch: sandbox",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "sandbox",
+      "args": ["--port", "8090"],
+      "cwd": "${workspaceFolder}",
+      "envFile": "${workspaceFolder}/.env",
+      "python": "${workspaceFolder}/.venv/bin/python",
+      "console": "integratedTerminal",
+      "justMyCode": true
+    },
+    {
+      "name": "Launch: platform",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "ai.api",
+      "args": ["platform", "--port", "8080"],
+      "cwd": "${workspaceFolder}",
+      "envFile": "${workspaceFolder}/.env",
+      "python": "${workspaceFolder}/.venv/bin/python",
+      "console": "integratedTerminal",
+      "justMyCode": true
+    },
+    {
+      "name": "Launch: agent",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "ai.api",
+      "args": ["agent", "--port", "8000"],
+      "cwd": "${workspaceFolder}",
+      "envFile": "${workspaceFolder}/.env",
+      "python": "${workspaceFolder}/.venv/bin/python",
+      "console": "integratedTerminal",
+      "justMyCode": true
+    },
+    {
+      "name": "Pytest: current file",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "pytest",
+      "args": ["${file}", "-x"],
+      "cwd": "${workspaceFolder}",
+      "envFile": "${workspaceFolder}/.env",
+      "python": "${workspaceFolder}/.venv/bin/python",
+      "console": "integratedTerminal",
+      "justMyCode": false
+    },
+    {
+      "name": "Attach: Spring backend (5005)",
+      "type": "java",
+      "request": "attach",
+      "hostName": "127.0.0.1",
+      "port": 5005,
+      "projectName": "api-copilot-backend"
+    },
+    {
+      "name": "Chrome: frontend (3000)",
+      "type": "chrome",
+      "request": "launch",
+      "url": "http://localhost:3000",
+      "webRoot": "${workspaceFolder}/apps/frontend/src"
+    }
+  ],
+  "compounds": [
+    {
+      "name": "Attach: all Python services",
+      "configurations": ["Attach: sandbox (5678)", "Attach: platform (5679)", "Attach: agent (5680)"],
+      "stopAll": true
+    },
+    {
+      "name": "Launch: sandbox + platform + agent",
+      "configurations": ["Launch: sandbox", "Launch: platform", "Launch: agent"],
+      "stopAll": true
+    }
+  ]
+}
