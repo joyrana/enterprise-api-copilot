@@ -49,7 +49,10 @@ def create_agent_app(
 ) -> Starlette:
     authority = service_authority(service_key)
     runs = RunService(
-        Orchestrator(services.runtime, checkpoints=store, telemetry=services.telemetry), store
+        Orchestrator(
+            services.runtime, llm=services.llm, checkpoints=store, telemetry=services.telemetry
+        ),
+        store,
     )
 
     async def health(request: Request, _: Principal | None) -> Response:

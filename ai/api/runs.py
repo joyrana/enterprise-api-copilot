@@ -15,7 +15,14 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
-from ai.agent.contracts import PendingApproval, RunEvent, RunState, RunStatus
+from ai.agent.contracts import (
+    ModelUsageTotals,
+    PendingApproval,
+    RunEvent,
+    RunState,
+    RunStatus,
+    UIComponent,
+)
 from ai.agent.orchestrator import CheckpointStore, Orchestrator
 from skills.runtime.approval_service import ApprovalService
 from skills.runtime.contracts import Principal
@@ -54,6 +61,9 @@ class RunView(BaseModel):
     tool_calls: int
     pending_approval: PendingApproval | None
     timeline: list[TimelineEvent]
+    mode: str = "deterministic"
+    ui: list[UIComponent] = Field(default_factory=list)
+    model: ModelUsageTotals | None = None
 
     @classmethod
     def of(cls, state: RunState) -> RunView:
@@ -72,6 +82,9 @@ class RunView(BaseModel):
             tool_calls=state.tool_calls,
             pending_approval=state.pending_approval,
             timeline=[TimelineEvent(kind=e.kind, detail=redact(e.detail)) for e in state.events],
+            mode=state.mode,
+            ui=[c.model_copy(update={"props": redact(c.props)}) for c in state.ui],
+            model=state.model_usage,
         )
 
 

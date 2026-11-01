@@ -145,3 +145,5 @@ evals/reports/
 
 # Local run checkpoints (python -m ai.api)
 .copilot/
+uv.lock
+dump.rdb

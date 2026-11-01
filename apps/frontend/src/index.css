@@ -12,7 +12,8 @@
     font-family: 'Inter', system-ui, sans-serif;
   }
 
-  code, pre {
+  code,
+  pre {
     font-family: 'JetBrains Mono', 'Fira Code', monospace;
   }
 }
@@ -34,5 +35,38 @@
 
   .badge {
     @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium;
+  }
+}
+
+/* Agent replies are markdown (no typography plugin installed). */
+@layer components {
+  .markdown {
+    @apply space-y-2 break-words;
+  }
+  .markdown ul {
+    @apply list-disc pl-5 space-y-1;
+  }
+  .markdown ol {
+    @apply list-decimal pl-5 space-y-1;
+  }
+  .markdown code {
+    @apply bg-gray-900 rounded px-1 py-0.5 text-[0.8em] text-brand-100;
+  }
+  .markdown pre {
+    @apply bg-gray-950 rounded-md p-3 overflow-x-auto text-xs;
+  }
+  .markdown pre code {
+    @apply bg-transparent p-0 text-gray-200;
+  }
+  .markdown a {
+    @apply text-brand-500 underline;
+  }
+  .markdown strong {
+    @apply text-white;
+  }
+  .markdown h1,
+  .markdown h2,
+  .markdown h3 {
+    @apply font-semibold text-white;
   }
 }

@@ -1,7 +1,9 @@
 import { useState } from 'react';
-import { Send, Loader2, Bot, User, ShieldCheck, ShieldX } from 'lucide-react';
-import { ApiError, needsAction, type Run } from '@/api/client';
+import Markdown from 'react-markdown';
+import { Send, Loader2, Bot, User, Sparkles } from 'lucide-react';
+import { ApiError, type Run } from '@/api/client';
 import { platform, getToken, setToken } from '@/api/session';
+import { GenUI } from '@/components/genui/GenUI';
 
 type Message =
   | { id: string; role: 'user'; content: string; timestamp: Date }
@@ -15,10 +17,25 @@ function describeError(err: unknown): string {
   return err instanceof Error ? err.message : 'Unexpected error';
 }
 
+function runBadge(run: Run): string {
+  const parts: string[] = [run.status, run.intent ?? 'no intent'];
+  if (run.mode === 'agentic' && run.model) {
+    parts.push(
+      `${run.model.model} · ${run.model.calls} LLM calls · ${(run.elapsed_s ?? 0).toFixed(1)}s`
+    );
+  } else {
+    parts.push(run.model?.fallbacks ? 'deterministic (LLM unavailable)' : 'deterministic');
+  }
+  parts.push(run.environment);
+  return parts.join(' · ');
+}
+
 /**
  * Chat page — sends requests to the platform API (POST /api/v1/runs) and shows the real
- * run outcome. Side-effecting actions stop for approval; the panel shows the exact action
- * and hash, and approving sends that hash back so the server rejects anything changed.
+ * run outcome: the agent's markdown reply plus the components it chose from the
+ * component registry (generative UI). Side-effecting actions stop for approval; the panel
+ * shows the exact action and hash, and approving sends that hash back so the server
+ * rejects anything changed.
  */
 export function ChatPage() {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -148,7 +165,7 @@ export function ChatPage() {
             </div>
             <div
               role={message.role === 'error' ? 'alert' : undefined}
-              className={`max-w-[75%] rounded-2xl px-4 py-3 text-sm ${
+              className={`${message.role === 'assistant' ? 'max-w-[90%] min-w-0' : 'max-w-[75%]'} rounded-2xl px-4 py-3 text-sm ${
                 message.role === 'user'
                   ? 'bg-brand-600 text-white rounded-tr-sm'
                   : message.role === 'error'
@@ -157,38 +174,30 @@ export function ChatPage() {
               }`}
             >
               {message.role === 'assistant' && message.run && (
-                <p className="text-xs uppercase tracking-wider text-gray-400 mb-1">
-                  {message.run.status} · {message.run.run_id} · {message.run.environment}
+                <p
+                  className="text-xs uppercase tracking-wider text-gray-400 mb-1 flex items-center gap-1"
+                  title={message.run.run_id}
+                >
+                  {message.run.mode === 'agentic' && (
+                    <Sparkles className="w-3 h-3 text-brand-500" />
+                  )}
+                  {runBadge(message.run)}
                 </p>
               )}
-              <p className="whitespace-pre-wrap">{message.content}</p>
-              {message.role === 'assistant' &&
-                message.run?.pending_approval &&
-                needsAction(message.run) && (
-                  <div className="mt-3 border border-amber-700 rounded-lg p-3 space-y-2">
-                    <p className="text-amber-300 font-medium">Approval required</p>
-                    <p>{message.run.pending_approval.summary}</p>
-                    <p className="font-mono text-xs break-all text-gray-400">
-                      action hash {message.run.pending_approval.action_hash}
-                    </p>
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => message.run && decide(message.run, true)}
-                        disabled={isLoading}
-                        className="btn-primary px-3 py-1 flex items-center gap-1"
-                      >
-                        <ShieldCheck className="w-4 h-4" /> Approve exactly this
-                      </button>
-                      <button
-                        onClick={() => message.run && decide(message.run, false)}
-                        disabled={isLoading}
-                        className="px-3 py-1 rounded-lg border border-gray-700 flex items-center gap-1"
-                      >
-                        <ShieldX className="w-4 h-4" /> Reject
-                      </button>
-                    </div>
-                  </div>
-                )}
+              {message.role === 'assistant' ? (
+                <div className="markdown">
+                  <Markdown>{message.content}</Markdown>
+                </div>
+              ) : (
+                <p className="whitespace-pre-wrap">{message.content}</p>
+              )}
+              {message.role === 'assistant' && message.run && (
+                <GenUI
+                  run={message.run}
+                  busy={isLoading}
+                  decide={(approve) => message.run && decide(message.run, approve)}
+                />
+              )}
               <p className="text-xs opacity-50 mt-1">{message.timestamp.toLocaleTimeString()}</p>
             </div>
           </div>
@@ -199,8 +208,9 @@ export function ChatPage() {
             <div className="w-8 h-8 rounded-full bg-brand-600 flex items-center justify-center">
               <Bot className="w-4 h-4 text-white" />
             </div>
-            <div className="bg-gray-800 rounded-2xl rounded-tl-sm px-4 py-3">
-              <Loader2 className="w-4 h-4 text-gray-400 animate-spin" />
+            <div className="bg-gray-800 rounded-2xl rounded-tl-sm px-4 py-3 flex items-center gap-2 text-xs text-gray-400">
+              <Loader2 className="w-4 h-4 animate-spin" />
+              Agent is classifying, planning and calling skills…
             </div>
           </div>
         )}
