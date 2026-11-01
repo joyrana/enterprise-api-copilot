@@ -20,7 +20,9 @@ replay_pid*
 *.iws
 *.iml
 *.ipr
-.vscode/
+.vscode/*
+!.vscode/launch.json
+!.vscode/extensions.json
 *.swp
 *.swo
 *~

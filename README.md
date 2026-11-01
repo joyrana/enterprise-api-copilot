@@ -171,6 +171,18 @@ make test-python                # unit, contract and system tests
 make eval-smoke                 # evaluation with safety hard gates (non-zero exit on any violation)
 ```
 
+### One-command setup and local run
+
+```bash
+./setup.sh          # .venv (incl. debugpy), frontend, CLI, backend deps; creates .env with dev-only secrets
+./dev.sh            # sandbox :8090 · platform API :8080 · agent API :8000 · web app :3000
+./dev.sh --debug    # same, Python services listen for debugpy on 5678 · 5679 · 5680
+```
+
+`./dev.sh sandbox platform` runs only the named services; `--with-backend` also starts PostgreSQL and Redis in Docker plus the Spring Boot backend on :8081. See `./dev.sh --help`.
+
+**Debugging in VS Code:** run `./dev.sh --debug` (add `--wait` to break in start-up code), then pick **Attach: all Python services** in Run and Debug. Or use the **Launch:** configs to start a single service under the debugger. Configs live in [`.vscode/launch.json`](.vscode/launch.json).
+
 ### Run the full workflow locally
 
 ```bash

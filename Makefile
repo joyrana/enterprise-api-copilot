@@ -1,7 +1,7 @@
 # Enterprise API Copilot — Makefile
 # Provides top-level targets for the most common developer tasks.
 
-.PHONY: help build test lint clean docker-up docker-down test-python lint-python eval-smoke eval-full sandbox platform agent load-test test-frontend-client
+.PHONY: help build test lint clean docker-up docker-down test-python lint-python eval-smoke eval-full sandbox platform agent load-test test-frontend-client setup dev dev-debug
 
 SHELL := /bin/bash
 .DEFAULT_GOAL := help
@@ -104,6 +104,15 @@ docker-build: ## Build all Docker images
 	docker compose -f docker/docker-compose.yml build
 
 # ─── Dev ─────────────────────────────────────────────────────────────────────
+setup: ## Install all dependencies and create .env (./setup.sh)
+	./setup.sh
+
+dev: ## Run sandbox, platform, agent and frontend locally (./dev.sh)
+	./dev.sh
+
+dev-debug: ## Same as dev, with Python services under debugpy (5678-5680)
+	./dev.sh --debug
+
 dev-backend: ## Run backend in dev mode
 	cd apps/backend && mvn -B spring-boot:run -Dspring-boot.run.profiles=local
 
