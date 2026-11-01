@@ -92,6 +92,28 @@ class PendingApproval(BaseModel):
     arguments: dict[str, Any]  # redacted
 
 
+class UIComponent(BaseModel):
+    """A frontend component chosen for the response (``ai.agent.ui`` registry).
+
+    ``props`` are always built server-side from real step output, never by a model.
+    """
+
+    id: str
+    component: str
+    source: str | None = None  # step id the props were built from
+    props: dict[str, Any] = Field(default_factory=dict)
+
+
+class ModelUsageTotals(BaseModel):
+    provider: str
+    model: str
+    calls: int = 0
+    input_tokens: int = 0
+    output_tokens: int = 0
+    latency_ms: float = 0.0
+    fallbacks: int = 0
+
+
 class RunEvent(BaseModel):
     kind: str
     detail: dict[str, Any] = Field(default_factory=dict)
@@ -103,9 +125,13 @@ class RunState(BaseModel):
     principal: Principal
     environment: str
     budget: RunBudget = Field(default_factory=RunBudget)
+    # "agentic": LLM intent → resolver → LLM step loop → LLM response + UI.
+    # "deterministic": rules → template plan → template response (no model configured).
+    mode: str = "deterministic"
     status: RunStatus = RunStatus.RUNNING
     intent: IntentResult | None = None
     plan: Plan | None = None
+    allowed_skills: list[str] = Field(default_factory=list)  # from the intent resolver
     cursor: int = 0
     results: dict[str, SkillResult] = Field(default_factory=dict)
     resolved_skills: dict[str, str] = Field(default_factory=dict)
@@ -115,6 +141,8 @@ class RunState(BaseModel):
     message: str = ""
     evidence: list[str] = Field(default_factory=list)
     missing_fields: list[str] = Field(default_factory=list)
+    ui: list[UIComponent] = Field(default_factory=list)
+    model_usage: ModelUsageTotals | None = None
     events: list[RunEvent] = Field(default_factory=list)
     started_at: float = 0.0
     paused_at: float | None = None

@@ -1,8 +1,7 @@
 """Provider-neutral model interface with structured output, usage and cost accounting.
 
-* ``ModelProvider`` is the only thing agent code depends on; vendor SDK adapters
-  (Anthropic, OpenAI) implement it in optional modules (deferred: SDKs not installable in
-  the session that produced this file).
+* ``ModelProvider`` is the only thing agent code depends on; adapters implement it over
+  plain httpx (``ai.models.ollama`` — the local default — and ``ai.models.anthropic``).
 * ``generate_structured`` parses model output into a Pydantic model and raises
   ``StructuredOutputError`` instead of returning partially valid data.
 * ``ScriptedModelProvider`` replays fixed responses for tests and evaluator calibration.
@@ -13,7 +12,7 @@ from __future__ import annotations
 import json
 import time
 from collections.abc import Sequence
-from typing import Protocol, TypeVar
+from typing import Any, Protocol, TypeVar
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
@@ -36,6 +35,7 @@ class ModelRequest(BaseModel):
     user: str
     prompt_version: str
     max_output_tokens: int = Field(default=512, ge=1, le=8192)
+    temperature: float = Field(default=0.0, ge=0, le=2)
     json_schema: dict[str, object] | None = None
 
 
@@ -57,6 +57,10 @@ class StructuredOutputError(ValueError):
     pass
 
 
+class ModelUnavailableError(RuntimeError):
+    """The provider could not be reached or refused the request (callers fall back)."""
+
+
 def _extract_json(text: str) -> str:
     text = text.strip()
     if text.startswith("```"):
@@ -68,10 +72,36 @@ def _extract_json(text: str) -> str:
     return text[start : end + 1]
 
 
+def inline_schema(schema: dict[str, Any]) -> dict[str, Any]:
+    """Resolve local ``$ref``s and drop ``$defs``/titles.
+
+    Grammar-constrained decoders (Ollama ``format``) handle plain nested schemas more
+    reliably than reference graphs.
+    """
+    defs = schema.get("$defs", {})
+
+    def walk(node: Any) -> Any:
+        if isinstance(node, dict):
+            if "$ref" in node:
+                return walk(defs[node["$ref"].rsplit("/", 1)[-1]])
+            return {k: walk(v) for k, v in node.items() if k not in {"$defs", "title"}}
+        if isinstance(node, list):
+            return [walk(v) for v in node]
+        return node
+
+    return walk(schema)  # type: ignore[no-any-return]
+
+
 async def generate_structured(
-    provider: ModelProvider, request: ModelRequest, schema: type[T]
+    provider: ModelProvider,
+    request: ModelRequest,
+    schema: type[T],
+    *,
+    json_schema: dict[str, Any] | None = None,
 ) -> tuple[T, ModelResponse]:
-    request = request.model_copy(update={"json_schema": schema.model_json_schema()})
+    """``json_schema`` overrides the schema sent to the model (e.g. a narrowed enum)."""
+    sent = json_schema if json_schema is not None else inline_schema(schema.model_json_schema())
+    request = request.model_copy(update={"json_schema": sent})
     response = await provider.generate(request)
     try:
         parsed = schema.model_validate(json.loads(_extract_json(response.text)))

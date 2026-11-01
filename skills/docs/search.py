@@ -34,9 +34,19 @@ class SourceSummary(BaseModel):
     injection_flags: list[str]
 
 
+class Passage(BaseModel):
+    """Text of an unflagged source, for a model to compose a cited answer from."""
+
+    marker: int
+    source_id: str
+    title: str
+    text: str
+
+
 class DocsSearchOutput(BaseModel):
     answer: GroundedAnswer
     sources: list[SourceSummary]
+    passages: list[Passage] = []
     dropped_for_budget: list[str]
 
 
@@ -70,6 +80,10 @@ def build_docs_skill(
                     injection_flags=s.injection_flags,
                 )
                 for s in pack.sources
+            ],
+            passages=[
+                Passage(marker=i, source_id=s.source_id, title=s.title, text=s.text)
+                for i, s in enumerate(pack.usable, start=1)
             ],
             dropped_for_budget=pack.dropped_for_budget,
         )

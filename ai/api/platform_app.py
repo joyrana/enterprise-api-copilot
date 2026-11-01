@@ -110,7 +110,9 @@ def create_platform_app(services: Services, config: PlatformConfig | None = None
         audience=PLATFORM_AUDIENCE,
         max_ttl_s=config.token_ttl_s,
     )
-    orchestrator = Orchestrator(services.runtime, checkpoints=store, telemetry=services.telemetry)
+    orchestrator = Orchestrator(
+        services.runtime, llm=services.llm, checkpoints=store, telemetry=services.telemetry
+    )
     approvals = ApprovalService(services.approval_signer, LocalPolicyEngine())
     runs = RunService(orchestrator, store, approvals)
 

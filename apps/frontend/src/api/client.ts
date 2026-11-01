@@ -7,12 +7,7 @@
  */
 
 export type RunStatus =
-  | 'RUNNING'
-  | 'AWAITING_APPROVAL'
-  | 'NEEDS_CLARIFICATION'
-  | 'COMPLETED'
-  | 'REJECTED'
-  | 'FAILED';
+  'RUNNING' | 'AWAITING_APPROVAL' | 'NEEDS_CLARIFICATION' | 'COMPLETED' | 'REJECTED' | 'FAILED';
 
 export interface PendingApproval {
   step_id: string;
@@ -25,6 +20,36 @@ export interface PendingApproval {
 export interface TimelineEvent {
   kind: string;
   detail?: Record<string, unknown>;
+}
+
+/** Names in the server's component registry (ai/agent/ui.py). */
+export type UIComponentName =
+  | 'operation_list'
+  | 'operation_detail'
+  | 'code_snippets'
+  | 'api_response'
+  | 'doc_sources'
+  | 'jwt_report'
+  | 'run_trace'
+  | 'approval_request'
+  | 'clarification';
+
+/** A component the agent chose for its reply; props are built server-side from step output. */
+export interface UIComponent {
+  id: string;
+  component: UIComponentName | string;
+  source: string | null;
+  props: Record<string, unknown>;
+}
+
+export interface ModelUsage {
+  provider: string;
+  model: string;
+  calls: number;
+  input_tokens: number;
+  output_tokens: number;
+  latency_ms: number;
+  fallbacks: number;
 }
 
 export interface Run {
@@ -42,6 +67,10 @@ export interface Run {
   tool_calls: number;
   pending_approval: PendingApproval | null;
   timeline: TimelineEvent[];
+  /** agentic = LLM-driven run; deterministic = rules/templates (no model or model down). */
+  mode?: 'agentic' | 'deterministic';
+  ui?: UIComponent[];
+  model?: ModelUsage | null;
 }
 
 export interface Me {

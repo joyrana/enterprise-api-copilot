@@ -16,7 +16,13 @@ import time
 
 import httpx
 
-from ai.models.base import ModelRequest, ModelResponse, ModelUsage, PriceTable
+from ai.models.base import (
+    ModelRequest,
+    ModelResponse,
+    ModelUnavailableError,
+    ModelUsage,
+    PriceTable,
+)
 
 API_VERSION = "2023-06-01"
 DEFAULT_MODEL = "claude-sonnet-5-5"
@@ -60,6 +66,7 @@ class AnthropicProvider:
         body = {
             "model": self.model,
             "max_tokens": request.max_output_tokens,
+            "temperature": request.temperature,
             "system": request.system,
             "messages": [{"role": "user", "content": user}],
         }
@@ -75,7 +82,7 @@ class AnthropicProvider:
                 },
             )
         if response.status_code != 200:
-            raise RuntimeError(f"anthropic API returned HTTP {response.status_code}")
+            raise ModelUnavailableError(f"anthropic API returned HTTP {response.status_code}")
         data = response.json()
         text = "".join(
             block.get("text", "")

@@ -1,12 +1,12 @@
-"""Intent classification.
+"""Deterministic intent classification and entity extraction.
 
-``RuleBasedIntentClassifier`` is deterministic and is the default (principle 4). An
-LLM classifier can be layered on top through ``ai.models`` (see ``LLMIntentClassifier``);
-on invalid model output it falls back to the rules and records that it did, so a fallback
-never changes the output contract.
+With a model configured, intent is decided by ``LLMIntentClassifier``
+(``ai.agent.intent_llm``); ``RuleBasedIntentClassifier`` is its fallback when the model is
+unreachable or returns invalid output, and the only classifier when no model is
+configured. Either way the output contract is the same.
 
-Entity extraction is always deterministic: identifiers, amounts, status codes and tokens
-are parsed with patterns, never inferred by a model.
+``extract_entities`` stays deterministic: it is the trusted reference that model-extracted
+values are grounded against (``ai.agent.grounding``).
 """
 
 from __future__ import annotations
@@ -129,6 +129,21 @@ def extract_entities(query: str) -> Entities:
     return ent
 
 
+def mask_jwt(query: str, placeholder: str = "<JWT>") -> str:
+    """The request with JWTs replaced, for text sent to a model."""
+    return _JWT.sub(placeholder, query)
+
+
+def currency_mentions(query: str) -> set[str]:
+    """ISO codes whose symbol, code or name appears in ``query``."""
+    lowered = query.lower()
+    return {
+        code
+        for word, code in _CURRENCY.items()
+        if (word in lowered if not word.isalpha() else re.search(rf"\b{word}\b", lowered))
+    }
+
+
 def operation_query(query: str) -> str:
     """The request with argument values (ids, amounts, tokens) removed.
 
@@ -143,11 +158,14 @@ def operation_query(query: str) -> str:
 class IntentClassifier(Protocol):
     name: str
 
-    def classify(self, query: str) -> IntentResult: ...
+    async def aclassify(self, query: str) -> IntentResult: ...
 
 
 class RuleBasedIntentClassifier:
     name = "rules-v1"
+
+    async def aclassify(self, query: str) -> IntentResult:
+        return self.classify(query)
 
     def classify(self, query: str) -> IntentResult:
         ent = extract_entities(query)

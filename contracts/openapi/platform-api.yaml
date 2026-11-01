@@ -345,6 +345,39 @@ components:
             - {$ref: "#/components/schemas/PendingApproval"}
             - {type: "null"}
         timeline: {type: array, items: {$ref: "#/components/schemas/TimelineEvent"}}
+        mode:
+          type: string
+          enum: [agentic, deterministic]
+          description: agentic = LLM intent, resolved skills, LLM step loop and LLM response; deterministic = rules and templates
+        ui:
+          type: array
+          description: Components chosen for the response (generative UI). Props are built server-side from step output.
+          items: {$ref: "#/components/schemas/UIComponent"}
+        model:
+          oneOf:
+            - {$ref: "#/components/schemas/ModelUsage"}
+            - {type: "null"}
+    UIComponent:
+      type: object
+      required: [id, component, props]
+      properties:
+        id: {type: string}
+        component:
+          type: string
+          enum: [operation_list, operation_detail, code_snippets, api_response, doc_sources, jwt_report, run_trace, approval_request, clarification]
+        source: {type: [string, "null"], description: Step id the props were built from}
+        props: {type: object}
+    ModelUsage:
+      type: object
+      required: [provider, model, calls, input_tokens, output_tokens, latency_ms, fallbacks]
+      properties:
+        provider: {type: string}
+        model: {type: string}
+        calls: {type: integer, minimum: 0}
+        input_tokens: {type: integer, minimum: 0}
+        output_tokens: {type: integer, minimum: 0}
+        latency_ms: {type: number, minimum: 0}
+        fallbacks: {type: integer, minimum: 0}
     ApproveRequest:
       type: object
       additionalProperties: false

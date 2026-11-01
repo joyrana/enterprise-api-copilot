@@ -91,7 +91,7 @@ Status reflects code **with tests** in this repository. Full evidence, blockers 
 | API skills against a synthetic sandbox gateway (OAuth, scopes, tenants, 429s, fault injection) | ✅ Implemented, tested end to end |
 | Apigee runtime-proxy adapter (configured URL only, SSRF-safe) | ✅ Implemented · ⚠️ not tested against live Apigee |
 | Documentation RAG: BM25 + LSA hybrid (RRF), tenant filtering, citations, abstention | ✅ In-process + PostgreSQL/pgvector SQL · pretrained embedder pending |
-| Agent core: intent → bounded plan → execution, approval pause/resume | ✅ Deterministic core · 🚧 LangGraph adapter pending |
+| LLM agent: LLM intent + grounded entities → intent resolver → bounded ReAct skill loop → LLM reply + generative UI | ✅ Qwen 3.5 9B on local Ollama by default, tested with scripted models · deterministic fallback · 🚧 LangGraph adapter pending |
 | Platform API ([OpenAPI](contracts/openapi/platform-api.yaml)) and agent API ([OpenAPI](contracts/openapi/agent-service.yaml)) | ✅ Reference implementation, contract-tested · 🚧 Spring Boot implementation pending |
 | Durable state: runs, single-use approvals, idempotency | ✅ SQLite (survives restarts and concurrent processes) · PostgreSQL driver pending |
 | Tracing: W3C `traceparent` from API → agent → skill → gateway | ✅ Implemented · OTel exporter pending |
@@ -116,17 +116,27 @@ flowchart LR
   Platform["Platform API<br/>identity · tenants · runs · approvals"]
   Platform -->|short-lived service token| Agent
   subgraph Agent["AI service (Python)"]
-    Orchestrator["Intent → plan → bounded executor"]
+    Orchestrator["LLM intent → resolver → ReAct loop → reply + UI"]
     Knowledge["Retrieval · context · grounded answers"]
     Runtime["Skill runtime<br/>(policy enforcement point)"]
     Orchestrator --> Knowledge
     Orchestrator --> Runtime
   end
+  Orchestrator -->|structured outputs| LLM["Ollama · Qwen 3.5 9B<br/>(local)"]
   Runtime -->|runtime calls only| Gateway["Apigee proxy<br/>or local sandbox"]
   Gateway --> APIs[(Enterprise / synthetic APIs)]
   Agent --> Store[(SQLite now · PostgreSQL + pgvector)]
   Platform --> Store
 ```
+
+### How a request flows
+
+1. **Intent (LLM).** The model picks one intent from a closed set and extracts entities. Extracted identifiers and amounts are kept only if they appear in the request ([grounding](ai/agent/grounding.py)).
+2. **Skill resolution (code).** The [intent resolver](ai/agent/resolver.py) fixes which skills that intent may use. A docs question can never reach a write skill, however the model or a document is steered.
+3. **Planning and execution (LLM, bounded).** A [ReAct-style loop](ai/agent/planner_llm.py) chooses one skill call at a time from the resolved set, using structured outputs and earlier observations, until it can answer. The orchestrator validates each decision: allowed skill, operation described before it is called, the operation's own invocation skill, and arguments grounded in the request. Missing values pause the run for clarification. Writes pause for approval.
+4. **Reply and generative UI (LLM).** The [responder](ai/agent/responder.py) writes the markdown answer and chooses components from the [component registry](ai/agent/ui.py): operation tables, contracts, code tabs, API responses, doc sources, JWT reports and a run trace. The server builds every component's props from real step output, and adds approval and clarification panels itself. The web app renders the components from its [matching registry](apps/frontend/src/components/genui/registry.ts).
+
+If the model is unreachable, runs fall back to the deterministic rules and templates, and `mode`, `model.fallbacks` and the timeline record that. With `COPILOT_LLM_PROVIDER=none` the agent runs deterministically, which tests and evaluations use.
 
 Every skill call goes through one path in the skill runtime:
 
@@ -157,6 +167,7 @@ Report vulnerabilities privately as described in [SECURITY.md](SECURITY.md).
 | Go 1.22+ | CLI |
 | Node.js 22+ | Web app client tests |
 | PostgreSQL 16+ with pgvector | Optional integration tests |
+| [Ollama](https://ollama.com) with `qwen3.5:9b` (`ollama pull qwen3.5:9b`) | The LLM agent (without it, runs fall back to the deterministic stack) |
 
 ### Install and verify (about two minutes, no credentials)
 
@@ -229,6 +240,9 @@ Configuration uses environment variables (12-factor). Copy [`.env.example`](.env
 | `COPILOT_STATE_DB` | SQLite path for durable runs, approvals and idempotency (required by the agent service) | unset = in-memory |
 | `COPILOT_GATEWAY_<ENV>_*` | Gateway base URL, token URL and client credentials for each environment | — |
 | `COPILOT_TRACE_JSON` | `1` emits JSON-lines spans on the `copilot.trace` logger | off |
+| `COPILOT_LLM_PROVIDER` | Agent model: `ollama`, `anthropic` or `none` (deterministic) | `ollama` |
+| `COPILOT_LLM_MODEL` / `COPILOT_LLM_BASE_URL` | Model name and server URL | `qwen3.5:9b` / `http://127.0.0.1:11434` |
+| `COPILOT_LLM_TIMEOUT_S` | Timeout for each model call | `120` |
 | `COPILOT_JUDGE_PROVIDER` / `COPILOT_JUDGE_MODEL` | Opt-in LLM judge for evaluations | off |
 
 ## Evaluation
@@ -261,10 +275,11 @@ Settings are chosen on the `dev` split and reported on `test`. The live LLM-judg
 
 ```text
 ai/              Python AI service
-  agent/           intent, binding, planner, bounded orchestrator
+  agent/           LLM intent, grounding, intent resolver, ReAct planner, responder,
+                   UI component registry, bounded orchestrator (+ deterministic fallback)
   api/             platform API (reference) + internal agent API, auth, runs
   knowledge/       ingestion, chunking, retrieval (BM25 / LSA / RRF), answers, SQL
-  models/          provider-neutral model interface (+ opt-in Anthropic provider)
+  models/          provider-neutral model interface: Ollama (default), Anthropic
   storage/         durable SQL runtime store (SQLite / PostgreSQL)
 skills/          skill runtime (policy enforcement point) and skills: api, docs, jwt, MCP adapter
 sandbox/         synthetic gateway, OpenAPI specs, public and tenant docs
