@@ -71,7 +71,7 @@ services:
       REDIS_PORT: 6379
       REDIS_PASSWORD: ${REDIS_PASSWORD:-dev-only-redis-password}
       # The agent service HTTP adapter is not built yet (Phase 4); see docs/implementation/STATUS.md.
-      AGENT_SERVICE_URL: http://agent-service:8000
+      AGENT_SERVICE_URL: http://agent-service:8001
     depends_on:
       postgres:
         condition: service_healthy

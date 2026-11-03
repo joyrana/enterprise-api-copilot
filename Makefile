@@ -49,8 +49,8 @@ sandbox: ## Start the synthetic sandbox gateway on :8090
 platform: ## Start the local platform API reference implementation on :8080 (local mode)
 	python -m ai.api platform --port 8080
 
-agent: ## Start the internal agent-service API on :8000
-	python -m ai.api agent --port 8000
+agent: ## Start the internal agent-service API on :8001
+	python -m ai.api agent --port 8001
 
 load-test: ## Load-test a running platform API (read-only workload)
 	python -m evals.load --base-url http://127.0.0.1:8080

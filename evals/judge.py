@@ -92,7 +92,8 @@ async def judge_item(
         max_output_tokens=200,
     )
     try:
-        verdict, response = await generate_structured(provider, request, Verdict)
+        # No repair retries: parse failures are part of what calibration measures.
+        verdict, response = await generate_structured(provider, request, Verdict, repairs=0)
     except StructuredOutputError:
         return None, {}
     u = response.usage

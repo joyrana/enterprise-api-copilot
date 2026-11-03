@@ -1,7 +1,7 @@
 """Serve the APIs.
 
     python -m ai.api platform --port 8080   # local reference platform API (local mode only)
-    python -m ai.api agent --port 8000      # internal agent-service API
+    python -m ai.api agent --port 8001      # internal agent-service API
 
 Configuration comes from the environment (``.env.example``). The agent API needs
 ``COPILOT_SERVICE_TOKEN_KEY`` (≥32 bytes) shared with the platform; in local mode a random
@@ -48,7 +48,7 @@ def main(argv: list[str] | None = None) -> None:
         if services.state is None:
             raise SystemExit("COPILOT_STATE_DB is required for the agent service (durable runs)")
         app = create_agent_app(services, service_key=key, store=services.state)
-        port = args.port or 8000
+        port = args.port or 8001
     uvicorn.run(app, host=args.host, port=port, log_level="info")
 
 

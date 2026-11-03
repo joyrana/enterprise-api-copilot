@@ -277,22 +277,28 @@ def build_components(
         if spec is None or not spec.selectable:
             rejected.append(f"{name}: not a selectable component")
             continue
-        key = (name, source if spec.sources else "")
-        if key in seen:
-            continue
         if spec.sources:
             chosen = ok_steps.get(source)
             if chosen is None or chosen.skill_id not in spec.sources:
-                rejected.append(
-                    f"{name}: '{source}' is not a successful {'/'.join(spec.sources)} step"
-                )
+                # Small models often name the wrong source (e.g. a citation marker). When
+                # exactly one successful step fits the component, that step is meant.
+                fitting = [k for k, r in ok_steps.items() if r.skill_id in spec.sources]
+                if len(fitting) != 1:
+                    rejected.append(
+                        f"{name}: '{source}' is not a successful {'/'.join(spec.sources)} step"
+                    )
+                    continue
+                source, chosen = fitting[0], ok_steps[fitting[0]]
+            if (name, source) in seen:
                 continue
             props = spec.build(chosen.output or {})
         else:
-            if name == "run_trace" and not (state.plan and state.plan.steps):
+            if (name, "") in seen or (
+                name == "run_trace" and not (state.plan and state.plan.steps)
+            ):
                 continue
             props = _trace_props(state)
-        seen.add(key)
+        seen.add((name, source if spec.sources else ""))
         out.append(
             UIComponent(
                 id=f"ui{len(out) + 1}",

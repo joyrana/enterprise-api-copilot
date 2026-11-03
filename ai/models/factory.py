@@ -1,8 +1,8 @@
 """Build the agent's model provider from configuration.
 
-``ollama`` (default for processes started from the environment) talks to a local Ollama
-server; ``anthropic`` uses the Messages API; ``none`` runs the deterministic stack only
-(tests, CI and air-gapped installs).
+``mlx`` (default for processes started from the environment) talks to a local
+``mlx_lm.server`` (OpenAI-compatible, Apple Silicon); ``anthropic`` uses the Messages API;
+``none`` runs the deterministic stack only (tests, CI and air-gapped installs).
 """
 
 from __future__ import annotations
@@ -11,7 +11,7 @@ import os
 
 from ai.models.base import ModelProvider
 
-PROVIDERS = ("ollama", "anthropic", "none")
+PROVIDERS = ("mlx", "anthropic", "none")
 
 
 def build_provider(
@@ -23,10 +23,10 @@ def build_provider(
 ) -> ModelProvider | None:
     if provider == "none":
         return None
-    if provider == "ollama":
-        from ai.models.ollama import DEFAULT_BASE_URL, DEFAULT_MODEL, OllamaProvider
+    if provider == "mlx":
+        from ai.models.mlx_server import DEFAULT_BASE_URL, DEFAULT_MODEL, MLXServerProvider
 
-        return OllamaProvider(
+        return MLXServerProvider(
             model=model or DEFAULT_MODEL,
             base_url=base_url or DEFAULT_BASE_URL,
             timeout_s=timeout_s,

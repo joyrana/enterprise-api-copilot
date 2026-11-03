@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Enterprise API Copilot — run the services locally with prefixed, colour-coded logs.
 #
-#   ./dev.sh                         sandbox :8090, platform :8080, agent :8000, frontend :3000
+#   ./dev.sh                         sandbox :8090, platform :8080, agent :8001, frontend :3000
 #   ./dev.sh sandbox platform        only the named services
 #   ./dev.sh --debug                 Python services run under debugpy (attach from VS Code)
 #   ./dev.sh --debug --wait          ...and block until a debugger attaches
@@ -104,7 +104,7 @@ run_agent() {
       until curl -sf -o /dev/null http://127.0.0.1:8080/api/v1/health; do sleep 1; done
       ;;
   esac
-  python_cmd 5680 ai.api agent --port 8000
+  python_cmd 5680 ai.api agent --port 8001
 }
 run_frontend() {
   cd apps/frontend
@@ -148,7 +148,7 @@ for svc in $SERVICES; do
   case "$svc" in
     sandbox) echo "  sandbox    http://127.0.0.1:8090$([ "$DEBUG" = 0 ] || echo '   debugpy 5678')" ;;
     platform) echo "  platform   http://127.0.0.1:8080$([ "$DEBUG" = 0 ] || echo '   debugpy 5679')" ;;
-    agent) echo "  agent      http://127.0.0.1:8000$([ "$DEBUG" = 0 ] || echo '   debugpy 5680')" ;;
+    agent) echo "  agent      http://127.0.0.1:8001$([ "$DEBUG" = 0 ] || echo '   debugpy 5680')" ;;
     frontend) echo "  frontend   http://localhost:3000" ;;
     backend) echo "  backend    http://127.0.0.1:8081$([ "$DEBUG" = 0 ] || echo '   JDWP 5005')" ;;
   esac

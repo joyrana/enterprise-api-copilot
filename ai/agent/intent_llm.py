@@ -1,10 +1,11 @@
-"""LLM intent classification and entity extraction with grounding and a rules fallback.
+"""LLM intent classification and entity extraction with grounding.
 
 The model chooses an intent from a closed enum and extracts entities. Extracted values
 are grounded against the request and the deterministic parse (``ai.agent.grounding``):
 ungrounded identifiers or amounts are dropped, so the model can read the request
-but cannot inject values into it. Unreachable or invalid model output falls back to the
-rule classifier, and ``IntentResult.classifier`` records that it did.
+but cannot inject values into it. There is no rules fallback: an unreachable model or
+invalid output raises ``ModelUnavailableError`` / ``StructuredOutputError`` and the
+orchestrator fails the run.
 """
 
 from __future__ import annotations
@@ -13,15 +14,8 @@ from pydantic import BaseModel, Field
 
 from ai.agent.contracts import Entities, Intent, IntentResult
 from ai.agent.grounding import ground_entities
-from ai.agent.intent import RuleBasedIntentClassifier, extract_entities
-from ai.models.base import (
-    ModelProvider,
-    ModelRequest,
-    ModelUnavailableError,
-    ModelUsage,
-    StructuredOutputError,
-    generate_structured,
-)
+from ai.agent.intent import extract_entities
+from ai.models.base import ModelProvider, ModelRequest, ModelUsage, generate_structured
 
 PROMPT_VERSION = "intent-v2"
 SYSTEM = """You are the intent classifier of an enterprise API copilot for synthetic \
@@ -80,13 +74,11 @@ class LLMIntentClassifier:
     def __init__(self, provider: ModelProvider) -> None:
         self.provider = provider
         self.name = f"llm:{provider.name}/{provider.model}"
-        self._rules = RuleBasedIntentClassifier()
         self.last_usage: ModelUsage | None = None
-        self.last_fallback: str | None = None
         self.dropped_entities: list[str] = []
 
     async def aclassify(self, query: str) -> IntentResult:
-        self.last_usage, self.last_fallback, self.dropped_entities = None, None, []
+        self.last_usage, self.dropped_entities = None, []
         reference = extract_entities(query)
         request = ModelRequest(
             task="intent",
@@ -95,14 +87,7 @@ class LLMIntentClassifier:
             prompt_version=PROMPT_VERSION,
             max_output_tokens=400,
         )
-        try:
-            parsed, response = await generate_structured(self.provider, request, _LLMIntent)
-        except (StructuredOutputError, ModelUnavailableError) as exc:
-            self.last_fallback = f"{type(exc).__name__}: {exc}"
-            fallback = self._rules.classify(query)
-            return fallback.model_copy(
-                update={"classifier": f"{self._rules.name} (fallback from {self.name})"}
-            )
+        parsed, response = await generate_structured(self.provider, request, _LLMIntent)
         self.last_usage = response.usage
         candidate = Entities.model_validate(parsed.entities.model_dump())
         entities, self.dropped_entities = ground_entities(candidate, query, reference)

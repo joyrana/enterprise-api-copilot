@@ -1,7 +1,7 @@
 """Provider-neutral model interface with structured output, usage and cost accounting.
 
 * ``ModelProvider`` is the only thing agent code depends on; adapters implement it over
-  plain httpx (``ai.models.ollama`` — the local default — and ``ai.models.anthropic``).
+  plain httpx (``ai.models.mlx_server`` — the local default — and ``ai.models.anthropic``).
 * ``generate_structured`` parses model output into a Pydantic model and raises
   ``StructuredOutputError`` instead of returning partially valid data.
 * ``ScriptedModelProvider`` replays fixed responses for tests and evaluator calibration.
@@ -75,8 +75,8 @@ def _extract_json(text: str) -> str:
 def inline_schema(schema: dict[str, Any]) -> dict[str, Any]:
     """Resolve local ``$ref``s and drop ``$defs``/titles.
 
-    Grammar-constrained decoders (Ollama ``format``) handle plain nested schemas more
-    reliably than reference graphs.
+    Small models follow (and structured-output decoders enforce) plain nested schemas
+    more reliably than reference graphs.
     """
     defs = schema.get("$defs", {})
 
@@ -98,16 +98,35 @@ async def generate_structured(
     schema: type[T],
     *,
     json_schema: dict[str, Any] | None = None,
+    repairs: int = 1,
 ) -> tuple[T, ModelResponse]:
-    """``json_schema`` overrides the schema sent to the model (e.g. a narrowed enum)."""
+    """``json_schema`` overrides the schema sent to the model (e.g. a narrowed enum).
+
+    Servers without schema-constrained decoding can return malformed JSON; the request is
+    repeated up to ``repairs`` times with the validation error before giving up.
+    """
     sent = json_schema if json_schema is not None else inline_schema(schema.model_json_schema())
     request = request.model_copy(update={"json_schema": sent})
-    response = await provider.generate(request)
-    try:
-        parsed = schema.model_validate(json.loads(_extract_json(response.text)))
-    except (ValueError, ValidationError) as exc:
-        raise StructuredOutputError(f"model output does not match {schema.__name__}") from exc
-    return parsed, response
+    attempt = request
+    for remaining in range(repairs, -1, -1):
+        response = await provider.generate(attempt)
+        try:
+            parsed = schema.model_validate(json.loads(_extract_json(response.text)))
+        except (ValueError, ValidationError) as exc:
+            if remaining == 0:
+                raise StructuredOutputError(
+                    f"model output does not match {schema.__name__}"
+                ) from exc
+            problem = str(exc).splitlines()[0][:300]
+            attempt = request.model_copy(
+                update={
+                    "user": f"{request.user}\n\nYour previous reply was invalid ({problem}). "
+                    "Reply with only the JSON object."
+                }
+            )
+            continue
+        return parsed, response
+    raise AssertionError("unreachable")  # pragma: no cover
 
 
 class PriceTable(BaseModel):

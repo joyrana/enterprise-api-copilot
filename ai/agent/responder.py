@@ -25,6 +25,8 @@ the developer sees, and choose which UI components to show beside it.
 Writing rules:
 - GitHub-flavored markdown, concise and specific. Lead with the direct answer and \
 the key result values (ids, statuses, amounts, HTTP status) from the observations.
+- API amounts are integers in the smallest currency unit: 125000 with INR is ₹1,250.00 \
+(paise), 5000 with USD is $50.00 (cents). Convert before stating an amount.
 - Use only facts present in the observations. Never invent operations, fields, values, \
 ids or documentation. If the observations do not answer the request, say so plainly.
 - Name operations in backticks (e.g. `createPayment`). Cite [marker] numbers only for \

@@ -34,12 +34,11 @@ async def test_llm_intent_valid_output_keeps_deterministic_entities() -> None:
         '{"intent": "api_discovery", "confidence": 7, "rationale": "x"}',
     ],
 )
-async def test_invalid_model_output_falls_back_without_changing_contract(bad: str) -> None:
-    result = await LLMIntentClassifier(ScriptedModelProvider([bad])).aclassify(
-        "Which API lists orders?"
-    )
-    assert result.intent is Intent.API_DISCOVERY
-    assert "fallback" in result.classifier
+async def test_invalid_model_output_raises_instead_of_falling_back_to_rules(bad: str) -> None:
+    provider = ScriptedModelProvider([bad, bad])  # the original reply and the repair retry
+    with pytest.raises(StructuredOutputError):
+        await LLMIntentClassifier(provider).aclassify("Which API lists orders?")
+    assert len(provider.requests) == 2
 
 
 async def test_generate_structured_raises_on_mismatch() -> None:
