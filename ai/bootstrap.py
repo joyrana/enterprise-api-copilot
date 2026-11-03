@@ -13,13 +13,13 @@ Configuration is read from environment variables (see ``.env.example``):
                              idempotency (in-memory when unset)
 ``COPILOT_GATEWAY_<ENV>_INSECURE_LOCAL`` ``true`` to allow plain-HTTP/private address for a
                              local sandbox host only
-``COPILOT_LLM_PROVIDER``     ``ollama`` (default) | ``anthropic`` | ``none`` (deterministic only)
-``COPILOT_LLM_MODEL``        model name (default ``qwen3.5:9b`` for Ollama)
-``COPILOT_LLM_BASE_URL``     provider URL (default ``http://127.0.0.1:11434`` for Ollama)
+``COPILOT_LLM_PROVIDER``     ``mlx`` (default) | ``anthropic`` | ``none`` (deterministic only)
+``COPILOT_LLM_MODEL``        model (default ``mlx-community/Qwen3-4B-Instruct-2507-4bit`` for mlx)
+``COPILOT_LLM_BASE_URL``     provider URL (default ``http://127.0.0.1:8000``, ``mlx_lm.server``)
 ``COPILOT_LLM_TIMEOUT_S``    per-call timeout in seconds (default 120)
 
 ``Settings()`` built in code (tests, evaluations) defaults to ``llm_provider="none"`` so
-they stay deterministic; ``Settings.from_env()`` defaults to Ollama.
+they stay deterministic; ``Settings.from_env()`` defaults to the local mlx-lm server.
 """
 
 from __future__ import annotations
@@ -80,7 +80,7 @@ class Settings(BaseModel):
     state_db: Path | None = None  # durable runs/approvals/idempotency (SQLite); None = in-memory
     max_response_bytes: int = 1_000_000
     http_timeout_s: float = 10.0
-    llm_provider: str = "none"  # ollama | anthropic | none
+    llm_provider: str = "none"  # mlx | anthropic | none
     llm_model: str | None = None
     llm_base_url: str | None = None
     llm_timeout_s: float = 120.0
@@ -118,9 +118,9 @@ class Settings(BaseModel):
             gateways=gateways,
             insecure_local_gateways=frozenset(insecure),
             state_db=Path(env["COPILOT_STATE_DB"]) if env.get("COPILOT_STATE_DB") else None,
-            llm_provider=env.get("COPILOT_LLM_PROVIDER", "").strip().lower() or "ollama",
+            llm_provider=env.get("COPILOT_LLM_PROVIDER", "").strip().lower() or "mlx",
             llm_model=env.get("COPILOT_LLM_MODEL") or None,
-            llm_base_url=env.get("COPILOT_LLM_BASE_URL") or env.get("OLLAMA_HOST") or None,
+            llm_base_url=env.get("COPILOT_LLM_BASE_URL") or None,
             llm_timeout_s=float(env.get("COPILOT_LLM_TIMEOUT_S") or 120),
         )
 

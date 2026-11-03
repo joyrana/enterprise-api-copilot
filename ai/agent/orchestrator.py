@@ -2,14 +2,15 @@
 
 Two modes, recorded on the run as ``RunState.mode``:
 
-* **agentic** (a model is configured — Qwen 3.5 9B on local Ollama by default): the LLM
+* **agentic** (a model is configured — Qwen3 4B on a local mlx-lm server by default): the LLM
   decides the intent and extracts entities (grounded against the request), the intent
   resolver fixes the skills that intent may use, an LLM step planner runs a bounded
   ReAct loop over those skills, and an LLM responder writes the answer and chooses UI
   components from the component registry. Every model decision is validated before it
-  reaches the skill runtime; if the model is unreachable the run falls back to the
-  deterministic mode and records why.
-* **deterministic** (no model): rules → template plan → template response.
+  reaches the skill runtime. If the model is unreachable or returns invalid output, the
+  run FAILS with that reason — it never falls back to rules or templates.
+* **deterministic** (only when no model is configured, ``COPILOT_LLM_PROVIDER=none``):
+  rules → template plan → template response.
 
 Properties (tested in ``tests/unit/test_agent.py``):
 
@@ -90,6 +91,11 @@ _STEP_NAMES = {
     "token.inspect": "inspect",
 }
 _MODEL_ERRORS = (StructuredOutputError, ModelUnavailableError)
+_STAGE_NAMES = {
+    "intent": "understanding the request",
+    "plan": "planning the next step",
+    "respond": "writing the reply",
+}
 _DENIAL_CODES = {
     SkillErrorCode.FORBIDDEN,
     SkillErrorCode.ENVIRONMENT_NOT_ALLOWED,
@@ -240,8 +246,21 @@ class Orchestrator:
         if self.llm is not None:
             state.model_usage = ModelUsageTotals(provider=self.llm.name, model=self.llm.model)
         with self.telemetry.span("agent.run", **{"copilot.run_id": state.run_id}) as span:
-            state.intent = await self.classifier.aclassify(query)
-            llm_reachable = self._account_classifier(state)
+            agentic = self.step_planner is not None
+            state.mode = "agentic" if agentic else "deterministic"
+            try:
+                state.intent = await self.classifier.aclassify(query)
+            except _MODEL_ERRORS as exc:
+                try:
+                    self._model_failed(state, "intent", exc)
+                except RunHaltError as failure:
+                    self._finish(state, failure.status, failure.message)
+                await self._respond(state)
+                self.checkpoints.save(state)
+                span.set("copilot.mode", state.mode)
+                span.set("copilot.status", state.status.value)
+                return state
+            self._account_classifier(state)
             state.events.append(
                 RunEvent(
                     kind="intent",
@@ -254,8 +273,6 @@ class Orchestrator:
                 )
             )
             span.set("copilot.intent", state.intent.intent.value)
-            agentic = self.step_planner is not None and llm_reachable
-            state.mode = "agentic" if agentic else "deterministic"
             mentioned = state.intent.entities.environment
             if mentioned and mentioned != environment:
                 state.events.append(
@@ -328,9 +345,7 @@ class Orchestrator:
         return state
 
     # ── model accounting ────────────────────────────────────────────────────
-    def _account(
-        self, state: RunState, usage: ModelUsage | None, *, fallback: bool = False
-    ) -> None:
+    def _account(self, state: RunState, usage: ModelUsage | None, *, failed: bool = False) -> None:
         totals = state.model_usage
         if totals is None:
             return
@@ -339,15 +354,35 @@ class Orchestrator:
             totals.input_tokens += usage.input_tokens
             totals.output_tokens += usage.output_tokens
             totals.latency_ms = round(totals.latency_ms + usage.latency_ms, 2)
-        if fallback:
-            totals.fallbacks += 1
+        if failed:
+            totals.failures += 1
 
-    def _account_classifier(self, state: RunState) -> bool:
-        """Record intent-model usage; False when the model was unreachable."""
+    def _model_failed(self, state: RunState, stage: str, exc: Exception) -> None:
+        """Record a model failure and stop the run: there is no rules/template fallback."""
+        self._account(state, None, failed=True)
+        error = f"{type(exc).__name__}: {exc}"
+        state.events.append(RunEvent(kind="model_failed", detail={"stage": stage, "error": error}))
+        model = f"{self.llm.name}/{self.llm.model}" if self.llm else "the model"
+        if isinstance(exc, ModelUnavailableError):
+            message = (
+                f"The language model ({model}) is unavailable, so I can't answer this request: "
+                f"{exc}. Start the model server and try again."
+            )
+        else:
+            message = (
+                f"The language model ({model}) returned output I couldn't use while "
+                f"{_STAGE_NAMES.get(stage, stage)}. Please try again."
+            )
+        done = sum(1 for r in state.results.values() if r.ok)
+        if done:
+            message += f" {done} step(s) had already run; their results are shown below."
+        raise RunHaltError(RunStatus.FAILED, message)
+
+    def _account_classifier(self, state: RunState) -> None:
+        """Record intent-model usage and entities the grounding check dropped."""
         if not isinstance(self.classifier, LLMIntentClassifier):
-            return True
-        fallback = self.classifier.last_fallback
-        self._account(state, self.classifier.last_usage, fallback=fallback is not None)
+            return
+        self._account(state, self.classifier.last_usage)
         if self.classifier.dropped_entities:
             state.events.append(
                 RunEvent(
@@ -355,12 +390,6 @@ class Orchestrator:
                     detail={"fields": self.classifier.dropped_entities, "reason": "ungrounded"},
                 )
             )
-        if fallback is None:
-            return True
-        state.events.append(
-            RunEvent(kind="model_fallback", detail={"stage": "intent", "error": fallback})
-        )
-        return not fallback.startswith(ModelUnavailableError.__name__)
 
     # ── agentic execution ───────────────────────────────────────────────────
     async def _execute_agentic(self, state: RunState, *, approval_token: str | None = None) -> None:
@@ -387,14 +416,7 @@ class Orchestrator:
                     try:
                         decision = await self.step_planner.next_step(state, skills)
                     except _MODEL_ERRORS as exc:
-                        self._account(state, None, fallback=True)
-                        state.events.append(
-                            RunEvent(
-                                kind="model_fallback",
-                                detail={"stage": "plan", "error": f"{type(exc).__name__}: {exc}"},
-                            )
-                        )
-                        break
+                        self._model_failed(state, "plan", exc)
                     self._account(state, self.step_planner.last_usage)
                     if decision.action == "finish":
                         state.events.append(
@@ -553,13 +575,10 @@ class Orchestrator:
                 if message:
                     state.message = message
             except _MODEL_ERRORS as exc:
-                self._account(state, None, fallback=True)
-                state.events.append(
-                    RunEvent(
-                        kind="model_fallback",
-                        detail={"stage": "respond", "error": f"{type(exc).__name__}: {exc}"},
-                    )
-                )
+                try:
+                    self._model_failed(state, "respond", exc)
+                except RunHaltError as failure:
+                    self._finish(state, failure.status, failure.message)
         state.ui, rejected = build_components(state, choices)
         state.events.append(
             RunEvent(

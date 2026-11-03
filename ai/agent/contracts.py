@@ -111,7 +111,7 @@ class ModelUsageTotals(BaseModel):
     input_tokens: int = 0
     output_tokens: int = 0
     latency_ms: float = 0.0
-    fallbacks: int = 0
+    failures: int = 0  # model calls that were unreachable or returned invalid output
 
 
 class RunEvent(BaseModel):

@@ -49,7 +49,8 @@ export interface ModelUsage {
   input_tokens: number;
   output_tokens: number;
   latency_ms: number;
-  fallbacks: number;
+  /** Model calls that failed; any failure ends the run as FAILED (no rules fallback). */
+  failures: number;
 }
 
 export interface Run {
@@ -67,7 +68,7 @@ export interface Run {
   tool_calls: number;
   pending_approval: PendingApproval | null;
   timeline: TimelineEvent[];
-  /** agentic = LLM-driven run; deterministic = rules/templates (no model or model down). */
+  /** agentic = LLM-driven run; deterministic = rules/templates (only when no model is configured). */
   mode?: 'agentic' | 'deterministic';
   ui?: UIComponent[];
   model?: ModelUsage | null;

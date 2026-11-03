@@ -348,7 +348,7 @@ components:
         mode:
           type: string
           enum: [agentic, deterministic]
-          description: agentic = LLM intent, resolved skills, LLM step loop and LLM response; deterministic = rules and templates
+          description: agentic = LLM intent, resolved skills, LLM step loop and LLM response (fails if the model is unavailable); deterministic = rules and templates, only when no model is configured
         ui:
           type: array
           description: Components chosen for the response (generative UI). Props are built server-side from step output.
@@ -369,7 +369,7 @@ components:
         props: {type: object}
     ModelUsage:
       type: object
-      required: [provider, model, calls, input_tokens, output_tokens, latency_ms, fallbacks]
+      required: [provider, model, calls, input_tokens, output_tokens, latency_ms, failures]
       properties:
         provider: {type: string}
         model: {type: string}
@@ -377,7 +377,7 @@ components:
         input_tokens: {type: integer, minimum: 0}
         output_tokens: {type: integer, minimum: 0}
         latency_ms: {type: number, minimum: 0}
-        fallbacks: {type: integer, minimum: 0}
+        failures: {type: integer, minimum: 0, description: Model calls that were unreachable or returned invalid output; any failure ends the run as FAILED}
     ApproveRequest:
       type: object
       additionalProperties: false

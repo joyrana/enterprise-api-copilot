@@ -20,7 +20,7 @@ from ai.agent.intent_llm import LLMIntentClassifier
 from ai.agent.orchestrator import FileCheckpointStore, Orchestrator
 from ai.agent.ui import REGISTRY
 from ai.models.base import ModelRequest, ModelResponse, ModelUnavailableError, ScriptedModelProvider
-from ai.models.ollama import OllamaProvider
+from ai.models.mlx_server import MLXServerProvider
 from skills.runtime.approval_service import ApprovalService
 from skills.runtime.contracts import Principal
 from skills.runtime.policy import LocalPolicyEngine
@@ -57,8 +57,8 @@ def tool_skills(state: Any) -> list[str]:
 
 
 class Unreachable:
-    name = "ollama"
-    model = "qwen3.5:9b"
+    name = "mlx"
+    model = "mlx-community/Qwen3-4B-Instruct-2507-4bit"
 
     async def generate(self, request: ModelRequest) -> ModelResponse:
         raise ModelUnavailableError("connection refused")
@@ -105,7 +105,8 @@ async def test_planner_cannot_reach_skills_outside_the_resolved_set() -> None:
             ),
             call("docs.search", query="minimum payment amount"),
             FINISH,
-            reply("The minimum is 100 minor units [1].", ("doc_sources", "docs")),
+            # "1" is a citation marker, not a step: resolved to the only docs.search step.
+            reply("The minimum is 100 minor units [1].", ("doc_sources", "1")),
         ]
     )
     state = await Orchestrator(h.services.runtime, llm=llm).run(
@@ -113,6 +114,7 @@ async def test_planner_cannot_reach_skills_outside_the_resolved_set() -> None:
     )
     assert state.status is RunStatus.COMPLETED
     assert tool_skills(state) == ["docs.search"]
+    assert [(c.component, c.source) for c in state.ui] == [("doc_sources", "docs")]
     rejected = [e for e in state.events if e.kind == "plan_rejected"]
     assert rejected and "not available" in rejected[0].detail["reason"]
     assert len(h.app.state.sandbox.tenant("acme").payments) == 3
@@ -217,16 +219,60 @@ async def test_jwt_placeholder_is_substituted_and_never_shown() -> None:
     assert jwt not in sent and "<JWT>" in sent
 
 
-async def test_unreachable_model_falls_back_to_the_deterministic_stack() -> None:
+async def test_unreachable_model_fails_the_run_without_rules_fallback() -> None:
     h = build_harness()
     state = await Orchestrator(h.services.runtime, llm=Unreachable()).run(
         "which endpoint tracks a shipment?", principal=DEV, environment="sandbox"
     )
-    assert state.mode == "deterministic" and state.status is RunStatus.COMPLETED
-    assert "getShipmentTracking" in state.message
-    assert state.model_usage and state.model_usage.fallbacks == 1
-    assert [c.component for c in state.ui] == ["operation_list"]
-    assert any(e.kind == "model_fallback" for e in state.events)
+    assert state.mode == "agentic" and state.status is RunStatus.FAILED
+    assert "unavailable" in state.message and "getShipmentTracking" not in state.message
+    assert state.intent is None and state.tool_calls == 0 and state.ui == []
+    assert state.model_usage and state.model_usage.failures == 1
+    failed = [e for e in state.events if e.kind == "model_failed"]
+    assert failed and failed[0].detail["stage"] == "intent"
+
+
+class FailsAfter:
+    """Answers the first ``n`` calls from a script, then becomes unreachable."""
+
+    name = "mlx"
+    model = "mlx-community/Qwen3-4B-Instruct-2507-4bit"
+
+    def __init__(self, outputs: list[str]) -> None:
+        self._scripted = ScriptedModelProvider(outputs)
+        self._left = len(outputs)
+
+    async def generate(self, request: ModelRequest) -> ModelResponse:
+        if self._left == 0:
+            raise ModelUnavailableError("connection refused")
+        self._left -= 1
+        return await self._scripted.generate(request)
+
+
+async def test_model_lost_mid_run_fails_but_shows_completed_steps() -> None:
+    h = build_harness()
+    llm = FailsAfter([intent("api_discovery"), call("api.search", query="track a shipment")])
+    state = await Orchestrator(h.services.runtime, llm=llm).run(
+        "which endpoint tracks a shipment?", principal=DEV, environment="sandbox"
+    )
+    assert state.status is RunStatus.FAILED and "unavailable" in state.message
+    assert "1 step(s) had already run" in state.message
+    assert [c.component for c in state.ui] == ["operation_list"]  # real search output
+    assert next(e for e in state.events if e.kind == "model_failed").detail["stage"] == "plan"
+
+
+async def test_responder_failure_fails_instead_of_using_the_template_reply() -> None:
+    h = build_harness()
+    llm = FailsAfter(
+        [intent("api_discovery"), call("api.search", query="track a shipment"), FINISH]
+    )
+    state = await Orchestrator(h.services.runtime, llm=llm).run(
+        "which endpoint tracks a shipment?", principal=DEV, environment="sandbox"
+    )
+    assert state.status is RunStatus.FAILED and "unavailable" in state.message
+    assert next(e for e in state.events if e.kind == "model_failed").detail["stage"] == "respond"
+    assert state.model_usage and state.model_usage.calls == 3
+    assert state.model_usage.failures == 1
 
 
 async def test_llm_entities_are_grounded_in_the_request() -> None:
@@ -241,25 +287,32 @@ async def test_llm_entities_are_grounded_in_the_request() -> None:
     assert "ord_A1B2" in llm.requests[0].user
 
 
-async def test_ollama_provider_sends_structured_request() -> None:
+async def test_mlx_provider_sends_openai_compatible_request() -> None:
     seen: dict[str, Any] = {}
 
     def handler(request: httpx.Request) -> httpx.Response:
+        seen["url"] = str(request.url)
         seen.update(json.loads(request.content))
         return httpx.Response(
             200,
             json={
-                "model": "qwen3.5:9b",
-                "message": {"role": "assistant", "content": '{"ok": true}'},
-                "prompt_eval_count": 12,
-                "eval_count": 3,
+                "model": "mlx-community/Qwen3-4B-Instruct-2507-4bit",
+                "choices": [
+                    {
+                        "message": {
+                            "role": "assistant",
+                            "content": '<think>\n\n</think>\n\n{"ok": true}',
+                        }
+                    }
+                ],
+                "usage": {"prompt_tokens": 12, "completion_tokens": 3},
             },
         )
 
-    provider = OllamaProvider(transport=httpx.MockTransport(handler))
+    provider = MLXServerProvider(transport=httpx.MockTransport(handler))
     response = await provider.generate(
         ModelRequest(
-            task="t",
+            task="plan",
             system="trusted",
             untrusted_context="doc text",
             user="question",
@@ -268,14 +321,24 @@ async def test_ollama_provider_sends_structured_request() -> None:
         )
     )
     assert response.text == '{"ok": true}' and response.usage.output_tokens == 3
-    assert seen["model"] == "qwen3.5:9b" and seen["think"] is False and seen["stream"] is False
-    assert seen["format"] == {"type": "object"}
-    assert seen["messages"][0] == {"role": "system", "content": "trusted"}
-    assert "<untrusted_context>" in seen["messages"][1]["content"]
+    assert seen["url"] == "http://127.0.0.1:8000/v1/chat/completions"
+    assert seen["model"] == "mlx-community/Qwen3-4B-Instruct-2507-4bit" and seen["stream"] is False
+    assert seen["chat_template_kwargs"] == {"enable_thinking": False}
+    assert seen["response_format"]["json_schema"]["schema"] == {"type": "object"}
+    system, user = seen["messages"][0]["content"], seen["messages"][1]["content"]
+    assert system.startswith("trusted") and '{"type":"object"}' in system
+    assert "<untrusted_context>" in user and user.endswith("question")
 
-    failing = OllamaProvider(transport=httpx.MockTransport(lambda r: httpx.Response(500)))
+    failing = MLXServerProvider(transport=httpx.MockTransport(lambda r: httpx.Response(500)))
     with pytest.raises(ModelUnavailableError):
         await failing.generate(ModelRequest(task="t", system="s", user="u", prompt_version="v"))
+
+
+async def test_malformed_json_is_repaired_once() -> None:
+    llm = ScriptedModelProvider(["sure! here you go", intent("docs_question")])
+    result = await LLMIntentClassifier(llm).aclassify("What is the minimum payment amount?")
+    assert result.intent is Intent.DOCS_QUESTION and result.classifier.startswith("llm:")
+    assert "previous reply was invalid" in llm.requests[1].user
 
 
 def test_component_registry_matches_the_platform_contract() -> None:

@@ -1,9 +1,9 @@
 """Deterministic intent classification and entity extraction.
 
 With a model configured, intent is decided by ``LLMIntentClassifier``
-(``ai.agent.intent_llm``); ``RuleBasedIntentClassifier`` is its fallback when the model is
-unreachable or returns invalid output, and the only classifier when no model is
-configured. Either way the output contract is the same.
+(``ai.agent.intent_llm``) and nothing else: if the model fails, the run fails.
+``RuleBasedIntentClassifier`` is used only when no model is configured
+(``COPILOT_LLM_PROVIDER=none``: tests, CI, evaluations).
 
 ``extract_entities`` stays deterministic: it is the trusted reference that model-extracted
 values are grounded against (``ai.agent.grounding``).

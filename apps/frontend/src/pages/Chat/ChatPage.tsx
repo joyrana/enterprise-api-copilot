@@ -23,8 +23,9 @@ function runBadge(run: Run): string {
     parts.push(
       `${run.model.model} · ${run.model.calls} LLM calls · ${(run.elapsed_s ?? 0).toFixed(1)}s`
     );
+    if (run.model.failures) parts.push('LLM unavailable');
   } else {
-    parts.push(run.model?.fallbacks ? 'deterministic (LLM unavailable)' : 'deterministic');
+    parts.push('deterministic (no LLM configured)');
   }
   parts.push(run.environment);
   return parts.join(' · ');

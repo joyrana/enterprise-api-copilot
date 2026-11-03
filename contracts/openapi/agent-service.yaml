@@ -10,7 +10,7 @@ info:
     data from request bodies. Approval tokens are issued by the platform's approval
     service and passed through unchanged; the agent's runtime verifies them (ADR-0006).
 servers:
-  - url: http://localhost:8000
+  - url: http://localhost:8001
 security:
   - serviceToken: []
 paths:
