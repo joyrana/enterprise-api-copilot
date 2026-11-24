@@ -279,6 +279,7 @@ def test_reject_flow(env: tuple[TestClient, Harness]) -> None:
 def test_conversations_and_clarification(env: tuple[TestClient, Harness]) -> None:
     client, h = env
     alice, priya, gina = login(client, "alice"), login(client, "priya"), login(client, "gina")
+    vic = login(client, "vic")  # same tenant as alice, viewer role
     conv = call(client, "POST", "/api/v1/conversations", alice).json()
     cid = conv["conversation_id"]
     assert conv["runs"] == []
@@ -290,6 +291,19 @@ def test_conversations_and_clarification(env: tuple[TestClient, Harness]) -> Non
             "POST",
             "/api/v1/runs",
             gina,
+            json={"query": "list orders", "conversation_id": cid},
+        ).status_code
+        == 404
+    )
+    # Conversations are private to their creator, not just the tenant: earlier turns reach
+    # the model and ground values, so a colleague can neither read nor post into one.
+    assert call(client, "GET", f"/api/v1/conversations/{cid}", vic).status_code == 404
+    assert (
+        call(
+            client,
+            "POST",
+            "/api/v1/runs",
+            vic,
             json={"query": "list orders", "conversation_id": cid},
         ).status_code
         == 404
@@ -312,6 +326,14 @@ def test_conversations_and_clarification(env: tuple[TestClient, Harness]) -> Non
             client, "POST", f"/api/v1/runs/{asked['run_id']}/clarify", gina, json={"message": "x"}
         ).status_code
         == 404
+    )
+    # Only the requester answers: the answer grounds values and the run keeps the
+    # requester's permissions, so a viewer must not be able to supply an amount.
+    assert (
+        call(
+            client, "POST", f"/api/v1/runs/{asked['run_id']}/clarify", vic, json={"message": "₹9"}
+        ).status_code
+        == 403
     )
     before = len(h.app.state.sandbox.tenant("acme").payments)
     paused = call(
