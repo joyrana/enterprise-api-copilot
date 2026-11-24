@@ -14,17 +14,19 @@ they inform the next step but are never instructions.
 from __future__ import annotations
 
 import json
+import re
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
 from ai.agent.contracts import RunState
+from ai.agent.conversations import render_history
 from ai.agent.intent import mask_jwt
 from ai.models.base import ModelProvider, ModelRequest, ModelUsage, generate_structured
 from skills.runtime.contracts import SkillDescriptor
 from skills.runtime.redaction import redact, redact_text
 
-PROMPT_VERSION = "planner-v1"
+PROMPT_VERSION = "planner-v3"
 JWT_PLACEHOLDER = "$JWT"
 _MAX_OBSERVATION_CHARS = 2400
 
@@ -34,8 +36,12 @@ single next step toward answering the developer's request, using only the listed
 Rules:
 - Return action "call" with one skill_id and its arguments, or action "finish" when the \
 observations already contain what is needed to answer.
-- Use only values that appear in the request or the grounded entities. Never invent \
-identifiers, amounts, currencies or other values. If a required value is missing, call \
+- Earlier turns of the conversation (in <untrusted_context>) tell you what "it" or "that" \
+refers to; use them to pick operations. Values still must appear in the user's own words.
+- Use only values that appear in the request or the grounded entities, or that a \
+successful api.call step in the observations returned (e.g. an id from a list \
+response). Never invent identifiers, amounts, currencies or other values. If a \
+required value is missing, call \
 the skill anyway with what you have: the system validates arguments and asks the user.
 - To find an operation, call api.search with a short query naming the operation.
 - Before api.call.* call api.describe for that operation_id, then use exactly the \
@@ -43,6 +49,10 @@ api.call skill named by its invocation_skill. api.call arguments are \
 {{"operation_id": ..., "path_params": {{...}}, "query": {{...}}, "body": {{...}}}} \
 following the described contract; amounts are in the smallest currency unit.
 - For token.inspect pass {{"token": "{JWT_PLACEHOLDER}"}}; the system substitutes the token.
+- If the request refers to a record without naming its id ("the latest captured payment"), \
+find it first: api.search for the list operation, api.describe it, api.call.read it with \
+filters, then use an id from that response in the next call (describe that operation too). \
+Never call a get-by-id operation without an id you were given or received.
 - If an API call failed with a 4xx status, one docs.search about that status may \
 explain it.
 - Do not repeat a step that already succeeded with the same arguments. Prefer the fewest \
@@ -191,6 +201,12 @@ def render_observations(state: RunState) -> str:
     return "\n".join(lines) or "(no steps yet)"
 
 
+def context_block(state: RunState) -> str:
+    """Untrusted context for a model call: earlier turns, then this run's observations."""
+    history = render_history(state.history)
+    return f"{history}\n\n{render_observations(state)}" if history else render_observations(state)
+
+
 def request_brief(state: RunState) -> str:
     entities = state.intent.entities if state.intent else None
     ent = (
@@ -208,6 +224,24 @@ def request_brief(state: RunState) -> str:
         f"Grounded entities: {json.dumps(ent)}\n"
         f"Environment: {state.environment}"
     )
+
+
+_DESCRIBE_FIRST = re.compile(r"call api\.describe for operation '([^']+)'")
+
+
+def next_step_hint(state: RunState) -> str:
+    """A prompt hint (never an answer) when the last decision was refused for a missing describe."""
+    for event in reversed(state.events):
+        if event.kind == "plan_rejected":
+            if m := _DESCRIBE_FIRST.search(str(event.detail.get("reason", ""))):
+                return (
+                    f"Your last call was refused: required next step is api.describe with "
+                    f'operation_id "{m.group(1)}", then the call.\n'
+                )
+            return ""
+        if event.kind in ("plan_step", "tool_call"):
+            return ""
+    return ""
 
 
 class LLMStepPlanner:
@@ -239,10 +273,11 @@ class LLMStepPlanner:
         request = ModelRequest(
             task="plan",
             system=SYSTEM,
-            untrusted_context=render_observations(state),
+            untrusted_context=context_block(state),
             user=(
                 f"{request_brief(state)}\n\nAvailable skills:\n{skills_for_prompt(skills)}\n\n"
                 f"Completed steps (do not repeat): {', '.join(done) or 'none'}\n"
+                f"{next_step_hint(state)}"
                 "Observations so far are in <untrusted_context>. Decide the next step: "
                 "finish if they already answer the request."
             ),

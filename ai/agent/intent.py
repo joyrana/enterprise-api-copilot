@@ -129,6 +129,28 @@ def extract_entities(query: str) -> Entities:
     return ent
 
 
+_CARRIED = ("payment_id", "customer_id", "order_id", "amount_minor", "currency")
+
+
+def extract_conversation_entities(prior_texts: list[str], query: str) -> Entities:
+    """Entities the *user typed* across a conversation; the newest mention of a field wins.
+
+    Only text the user typed is parsed. A JWT is never carried over from an earlier turn.
+    """
+    merged = Entities()
+    for text in [*prior_texts, query]:
+        found = extract_entities(text)
+        for name in _CARRIED:
+            value = getattr(found, name)
+            if value is not None:
+                setattr(merged, name, value)
+    current = extract_entities(query)
+    for name in Entities.model_fields:
+        if name not in _CARRIED:
+            setattr(merged, name, getattr(current, name))
+    return merged
+
+
 def mask_jwt(query: str, placeholder: str = "<JWT>") -> str:
     """The request with JWTs replaced, for text sent to a model."""
     return _JWT.sub(placeholder, query)

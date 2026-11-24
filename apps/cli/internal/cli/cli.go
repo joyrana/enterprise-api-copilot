@@ -68,13 +68,15 @@ Commands:
   doctor                             Check configuration, backend and login
   login --user NAME | --token-stdin  Authenticate (dev users in local mode, or a token on stdin)
   logout                             Forget the stored token
-  ask QUERY... [--env sandbox]       Ask the copilot to do something
+  ask QUERY... [--env sandbox] [--conversation ID]  Ask the copilot to do something
+  conversations new                  Start a conversation (earlier turns give follow-ups context)
   api search QUERY... [--limit N]    Search the API catalog
   api describe OPERATION_ID          Show an operation's auth, scopes and schema
   runs list [--status S] [--limit N] List runs in your tenant
   runs get RUN_ID                    Show a run and its timeline
   runs approve RUN_ID [--yes]        Approve the exact pending action
   runs reject RUN_ID [--reason R]    Reject the pending action
+  runs clarify RUN_ID ANSWER...      Answer a run that needs more information
   approvals                          List runs awaiting approval
   skills list                        List registered skills
   eval run [--suite smoke|full] [--repo DIR]  Run the offline evaluation (needs Python)
@@ -157,7 +159,10 @@ func (a *app) dispatch(ctx context.Context, cmd string, args []string) (int, err
 	case "runs":
 		return a.sub(ctx, "runs", args, map[string]func(context.Context, []string) (int, error){
 			"list": a.runsList, "get": a.runsGet, "approve": a.runsApprove, "reject": a.runsReject,
+			"clarify": a.runsClarify,
 		})
+	case "conversations":
+		return a.sub(ctx, "conversations", args, map[string]func(context.Context, []string) (int, error){"new": a.conversationsNew})
 	case "approvals":
 		return a.runsList(ctx, append([]string{"--status", "AWAITING_APPROVAL"}, args...))
 	case "skills":

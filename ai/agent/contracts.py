@@ -114,6 +114,29 @@ class ModelUsageTotals(BaseModel):
     failures: int = 0  # model calls that were unreachable or returned invalid output
 
 
+class HistoryTurn(BaseModel):
+    """One earlier turn of a conversation, reduced to what later turns may use as context.
+
+    ``user`` is what the user typed (redacted); ``assistant`` is the reply (redacted, cut
+    to a budget). Neither is a grounding source except the user's own text.
+    """
+
+    run_id: str
+    user: str
+    assistant: str = ""
+    intent: str | None = None
+    operations: list[str] = Field(default_factory=list)
+    entities: dict[str, Any] = Field(default_factory=dict)
+
+
+class BlockedStep(BaseModel):
+    """The model decision that stopped on missing values, kept so a clarification resumes it."""
+
+    skill_id: str
+    arguments: dict[str, Any] = Field(default_factory=dict)
+    thought: str = ""
+
+
 class RunEvent(BaseModel):
     kind: str
     detail: dict[str, Any] = Field(default_factory=dict)
@@ -144,6 +167,16 @@ class RunState(BaseModel):
     ui: list[UIComponent] = Field(default_factory=list)
     model_usage: ModelUsageTotals | None = None
     events: list[RunEvent] = Field(default_factory=list)
+    # Conversation memory (G1): bounded, redacted summary of earlier turns plus the text the
+    # user typed in them. Context only; the typed text is the sole part used for grounding.
+    conversation_id: str | None = None
+    history: list[HistoryTurn] = Field(default_factory=list)
+    prior_user_texts: list[str] = Field(default_factory=list)
+    # Resumable clarification (G2): what the user answered, and the decision that was blocked.
+    clarifications: list[str] = Field(default_factory=list)
+    blocked: BlockedStep | None = None
+    # Values bound from earlier API results (G3): step id -> field -> {step_id, path}.
+    provenance: dict[str, dict[str, dict[str, str]]] = Field(default_factory=dict)
     started_at: float = 0.0
     paused_at: float | None = None
     elapsed_s: float = 0.0

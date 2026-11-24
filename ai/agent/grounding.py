@@ -12,7 +12,10 @@ against the user's own text and the deterministic entity parse:
 
 Ungrounded values are dropped. Required fields that remain unbound are reported as
 missing, so the run asks the user instead of guessing. Text from documents or API
-responses is never a grounding source.
+responses is never a grounding source, with one exception (G3): values returned by
+*successful* ``api.call.*`` steps of the same run (hence the same tenant and principal)
+are a source, recorded with provenance (step id + JSON path). ``docs.search`` output and
+failed calls never are.
 """
 
 from __future__ import annotations
@@ -25,6 +28,7 @@ from pydantic import BaseModel, Field
 from ai.agent.binding import bind_call_arguments
 from ai.agent.contracts import Entities
 from ai.agent.intent import currency_mentions
+from skills.runtime.contracts import SkillResult
 
 _NUMBER = re.compile(r"\d[\d,]*(?:\.\d+)?")
 _LANGUAGES = {"curl", "python", "javascript", "java"}
@@ -32,11 +36,60 @@ _REFUND_REASONS = {"duplicate", "fraudulent", "requested_by_customer"}
 _STATUS_WORDS = {"authorized", "captured", "refunded", "cancelled"}
 
 
+class ApiValue(BaseModel):
+    """A scalar from a successful API call's response, with where it came from."""
+
+    value: str | int | float
+    step_id: str
+    path: str
+
+
+_MAX_API_VALUES = 500
+
+
+def collect_api_values(results: dict[str, SkillResult]) -> list[ApiValue]:
+    """Scalars from successful ``api.call.*`` responses. Nothing else is ever a source."""
+    out: list[ApiValue] = []
+
+    def walk(node: Any, step_id: str, path: str, depth: int) -> None:
+        if len(out) >= _MAX_API_VALUES or depth > 8:
+            return
+        if isinstance(node, dict):
+            for key, item in node.items():
+                walk(item, step_id, f"{path}.{key}" if path else str(key), depth + 1)
+        elif isinstance(node, list):
+            for i, item in enumerate(node[:50]):
+                walk(item, step_id, f"{path}.{i}" if path else str(i), depth + 1)
+        elif isinstance(node, str | int | float) and not isinstance(node, bool):
+            out.append(ApiValue(value=node, step_id=step_id, path=path))
+
+    for step_id, result in results.items():
+        output = result.output
+        if (
+            result.skill_id.startswith("api.call.")
+            and result.ok
+            and output is not None
+            and output.get("ok") is True  # upstream 2xx; a 4xx/5xx body is not a source
+        ):
+            walk(output.get("response_body"), step_id, "", 0)
+    return out
+
+
+def _api_source(value: Any, api_values: list[ApiValue]) -> ApiValue | None:
+    if isinstance(value, bool) or not isinstance(value, str | int | float):
+        return None
+    for item in api_values:
+        if type(item.value) is type(value) and item.value == value:
+            return item
+    return None
+
+
 class GroundedCall(BaseModel):
     arguments: dict[str, Any]
     missing: list[str] = Field(default_factory=list)
     dropped: list[str] = Field(default_factory=list)  # model-proposed, ungrounded
     overridden: list[str] = Field(default_factory=list)  # replaced by the parsed value
+    provenance: dict[str, dict[str, str]] = Field(default_factory=dict)  # field -> source
 
 
 def _numbers(query: str) -> set[float]:
@@ -119,10 +172,32 @@ def ground_entities(
 
 
 def ground_call_arguments(
-    proposed: dict[str, Any], describe: dict[str, Any], query: str, entities: Entities
+    proposed: dict[str, Any],
+    describe: dict[str, Any],
+    query: str,
+    entities: Entities,
+    api_values: list[ApiValue] | None = None,
 ) -> GroundedCall:
-    """Validate model-proposed ``api.call.*`` arguments against the described contract."""
+    """Validate model-proposed ``api.call.*`` arguments against the described contract.
+
+    ``query`` is the grounding text: what the user typed (this turn, earlier turns they
+    typed, clarification answers). ``api_values`` are earlier successful API results.
+    """
     result = GroundedCall(arguments={"operation_id": describe["operation_id"]})
+    api_values = api_values or []
+
+    def grounded(field: str, value: Any, schema: dict[str, Any]) -> bool:
+        if is_grounded(value, schema, query, entities):
+            return True
+        enum = schema.get("enum")
+        if enum is not None and value not in enum:
+            return False
+        source = _api_source(value, api_values)
+        if source is None:
+            return False
+        result.provenance[field] = {"step_id": source.step_id, "path": source.path}
+        return True
+
     fallback, _ = bind_call_arguments(describe, entities)
 
     def schema_of(param: dict[str, Any]) -> dict[str, Any]:
@@ -138,7 +213,7 @@ def ground_call_arguments(
         if location not in ("path", "query"):
             continue
         value = source.get(name) if isinstance(source, dict) else None
-        if value is not None and not is_grounded(value, schema_of(param), query, entities):
+        if value is not None and not grounded(f"{location}.{name}", value, schema_of(param)):
             result.dropped.append(f"{location}.{name}")
             value = None
         if value is None:
@@ -162,7 +237,7 @@ def ground_call_arguments(
         body: dict[str, Any] = {}
         for name, value in (proposed_body or {}).items():
             prop = properties.get(name)
-            if prop is None or not is_grounded(value, prop or {}, query, entities):
+            if prop is None or not grounded(f"body.{name}", value, prop or {}):
                 result.dropped.append(f"body.{name}")
                 continue
             body[name] = value

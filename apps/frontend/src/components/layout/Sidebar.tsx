@@ -1,11 +1,5 @@
 import { NavLink } from 'react-router-dom';
-import {
-  LayoutDashboard,
-  MessageSquare,
-  History,
-  Network,
-  Zap,
-} from 'lucide-react';
+import { LayoutDashboard, MessageSquare, History, Network, Zap } from 'lucide-react';
 import { clsx } from 'clsx';
 
 const NAV_ITEMS = [

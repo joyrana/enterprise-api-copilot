@@ -40,6 +40,7 @@ from typing import Any, Protocol
 
 from ai.agent.binding import bind_call_arguments
 from ai.agent.contracts import (
+    BlockedStep,
     Intent,
     ModelUsageTotals,
     PendingApproval,
@@ -50,8 +51,9 @@ from ai.agent.contracts import (
     RunState,
     RunStatus,
 )
-from ai.agent.grounding import ground_call_arguments
-from ai.agent.intent import IntentClassifier, RuleBasedIntentClassifier
+from ai.agent.conversations import ConversationContext
+from ai.agent.grounding import collect_api_values, ground_call_arguments
+from ai.agent.intent import IntentClassifier, RuleBasedIntentClassifier, extract_entities
 from ai.agent.intent_llm import LLMIntentClassifier
 from ai.agent.planner import BIND_SKILL, CALL_SKILLS, Planner, TemplatePlanner
 from ai.agent.planner_llm import JWT_PLACEHOLDER, LLMStepPlanner, StepDecision
@@ -67,7 +69,7 @@ from ai.models.base import (
 from ai.telemetry import Telemetry
 from skills.runtime.contracts import InvocationContext, Principal, SkillResult
 from skills.runtime.errors import SkillErrorCode
-from skills.runtime.redaction import redact
+from skills.runtime.redaction import redact, redact_text
 from skills.runtime.runtime import SkillRuntime
 
 _UPSTREAM_HINTS = {
@@ -234,7 +236,15 @@ class Orchestrator:
         self.budget = budget or (RunBudget(deadline_s=240) if llm is not None else RunBudget())
         self.telemetry = telemetry or Telemetry()
 
-    async def run(self, query: str, *, principal: Principal, environment: str) -> RunState:
+    async def run(
+        self,
+        query: str,
+        *,
+        principal: Principal,
+        environment: str,
+        conversation_id: str | None = None,
+        context: ConversationContext | None = None,
+    ) -> RunState:
         state = RunState(
             run_id=f"run_{uuid.uuid4().hex[:16]}",
             query=query,
@@ -242,6 +252,9 @@ class Orchestrator:
             environment=environment,
             budget=self.budget,
             started_at=time.time(),
+            conversation_id=conversation_id,
+            history=context.turns if context else [],
+            prior_user_texts=context.user_texts if context else [],
         )
         if self.llm is not None:
             state.model_usage = ModelUsageTotals(provider=self.llm.name, model=self.llm.model)
@@ -249,7 +262,10 @@ class Orchestrator:
             agentic = self.step_planner is not None
             state.mode = "agentic" if agentic else "deterministic"
             try:
-                state.intent = await self.classifier.aclassify(query)
+                if isinstance(self.classifier, LLMIntentClassifier):
+                    state.intent = await self.classifier.aclassify(query, context)
+                else:
+                    state.intent = await self.classifier.aclassify(query)
             except _MODEL_ERRORS as exc:
                 try:
                     self._model_failed(state, "intent", exc)
@@ -343,6 +359,46 @@ class Orchestrator:
         await self._respond(state)
         self.checkpoints.save(state)
         return state
+
+    async def clarify(self, run_id: str, message: str) -> RunState:
+        """Continue a run that stopped on missing values, using the user's answer.
+
+        The answer becomes an extra grounding source for this run only; the blocked call
+        is re-grounded and approval still applies to writes.
+        """
+        state = self.checkpoints.load(run_id)
+        if state is None:
+            raise KeyError(f"unknown run {run_id}")
+        if not self.awaiting_clarification(state):
+            raise ValueError("run is not waiting for a clarification")
+        state.clarifications.append(message)
+        if state.intent is not None:
+            typed = extract_entities(message)
+            for name in ("payment_id", "customer_id", "order_id", "amount_minor", "currency"):
+                if getattr(typed, name) is not None:
+                    setattr(state.intent.entities, name, getattr(typed, name))
+        state.status = RunStatus.RUNNING
+        state.missing_fields = []
+        state.started_at = time.time() - state.elapsed_s
+        state.events.append(
+            RunEvent(kind="clarified", detail={"message": redact_text(message)[:200]})
+        )
+        if state.mode == "agentic" and self.step_planner is not None:
+            await self._execute_agentic(state)
+        else:
+            await self._execute(state)
+        await self._respond(state)
+        self.checkpoints.save(state)
+        return state
+
+    @staticmethod
+    def awaiting_clarification(state: RunState) -> bool:
+        """True when a clarification can resume the run (a call was blocked on values)."""
+        if state.status is not RunStatus.NEEDS_CLARIFICATION or not state.missing_fields:
+            return False
+        return state.blocked is not None or (
+            state.mode == "deterministic" and state.plan is not None
+        )
 
     # ── model accounting ────────────────────────────────────────────────────
     def _account(self, state: RunState, usage: ModelUsage | None, *, failed: bool = False) -> None:
@@ -440,12 +496,23 @@ class Orchestrator:
                         break
                     if decisions >= state.budget.max_steps + 2 or rejections >= 3:
                         break
-                    decisions += 1
-                    try:
-                        decision = await self.step_planner.next_step(state, skills)
-                    except _MODEL_ERRORS as exc:
-                        self._model_failed(state, "plan", exc)
-                    self._account(state, self.step_planner.last_usage)
+                    if state.blocked is not None:
+                        # Resumed after a clarification: re-ground the blocked decision
+                        # with the user's answer instead of asking the model again.
+                        blocked, state.blocked = state.blocked, None
+                        decision = StepDecision(
+                            thought=blocked.thought,
+                            action="call",
+                            skill_id=blocked.skill_id,
+                            arguments=blocked.arguments,
+                        )
+                    else:
+                        decisions += 1
+                        try:
+                            decision = await self.step_planner.next_step(state, skills)
+                        except _MODEL_ERRORS as exc:
+                            self._model_failed(state, "plan", exc)
+                        self._account(state, self.step_planner.last_usage)
                     if decision.action == "finish":
                         state.events.append(
                             RunEvent(kind="plan_finish", detail={"thought": decision.thought[:300]})
@@ -520,6 +587,7 @@ class Orchestrator:
                 f"use one of {', '.join(state.allowed_skills)} or finish"
             )
         arguments = dict(decision.arguments)
+        provenance: dict[str, dict[str, str]] = {}
         if skill_id == "token.inspect":
             if not state.intent.entities.jwt:
                 return None, "the request contains no JWT to inspect"
@@ -535,7 +603,11 @@ class Orchestrator:
             if skill_id != expected:
                 return None, f"operation '{operation_id}' must be invoked with {expected}"
             grounded = ground_call_arguments(
-                arguments, described, state.query, state.intent.entities
+                arguments,
+                described,
+                self._grounding_text(state),
+                state.intent.entities,
+                collect_api_values(state.results),
             )
             state.events.append(
                 RunEvent(
@@ -545,11 +617,15 @@ class Orchestrator:
                         "dropped": grounded.dropped,
                         "overridden": grounded.overridden,
                         "missing": grounded.missing,
+                        "provenance": grounded.provenance,
                     },
                 )
             )
             if grounded.missing:
                 state.missing_fields = grounded.missing
+                state.blocked = BlockedStep(
+                    skill_id=skill_id, arguments=decision.arguments, thought=decision.thought
+                )
                 raise RunHaltError(
                     RunStatus.NEEDS_CLARIFICATION,
                     f"To call {described['method']} {described['path']} I still need: "
@@ -557,6 +633,7 @@ class Orchestrator:
                     + ".",
                 )
             arguments = grounded.arguments
+            provenance = grounded.provenance
         for step in state.plan.steps if state.plan else []:
             done = state.results.get(step.step_id)
             if step.skill_id == skill_id and step.arguments == arguments and done and done.ok:
@@ -564,6 +641,8 @@ class Orchestrator:
         step_id = self._step_id(state, skill_id)
         if skill_id in CALL_SKILLS:
             state.resolved_skills[step_id] = skill_id
+        if provenance:
+            state.provenance[step_id] = provenance
         return (
             PlanStep(
                 step_id=step_id,
@@ -573,6 +652,14 @@ class Orchestrator:
             ),
             "",
         )
+
+    @staticmethod
+    def _grounding_text(state: RunState) -> str:
+        """Text the user typed: earlier turns, this request and clarification answers.
+
+        Assistant replies and API output are deliberately absent.
+        """
+        return "\n".join([*state.prior_user_texts, state.query, *state.clarifications])
 
     @staticmethod
     def _described(state: RunState, operation_id: str | None) -> dict[str, Any] | None:
@@ -746,7 +833,7 @@ class Orchestrator:
                 skill_id=skill_id,
                 action_hash=str(result.error.details["action_hash"]),
                 environment=state.environment,
-                summary=self._summarise_action(state, skill_id, arguments),
+                summary=self._summarise_action(state, skill_id, arguments, step.step_id),
                 arguments=redact(arguments),
             )
             state.message = f"Approval required: {state.pending_approval.summary}"
@@ -766,7 +853,9 @@ class Orchestrator:
             RunStatus.FAILED, f"{skill_id} failed ({code}): {result.error.message}.{advice}"
         )
 
-    def _summarise_action(self, state: RunState, skill_id: str, arguments: dict[str, Any]) -> str:
+    def _summarise_action(
+        self, state: RunState, skill_id: str, arguments: dict[str, Any], step_id: str = ""
+    ) -> str:
         described = self._described(state, arguments.get("operation_id"))
         target = f"{described['method']} {described['path']}" if described else skill_id
         body = (
@@ -774,7 +863,18 @@ class Orchestrator:
             if arguments.get("body")
             else "no body"
         )
-        return f"{target} in '{state.environment}' with {body}"
+        summary = f"{target} in '{state.environment}' with {body}"
+        sources = state.provenance.get(step_id, {})
+        if sources:
+            summary += (
+                " (taken from earlier API results: "
+                + "; ".join(
+                    f"{field} from [{src['step_id']}] {src['path']}"
+                    for field, src in sorted(sources.items())
+                )
+                + ")"
+            )
+        return summary
 
     async def _reflect(self, state: RunState) -> None:
         """One bounded recovery step: explain upstream 4xx outcomes from documentation."""

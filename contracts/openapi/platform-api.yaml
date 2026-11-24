@@ -138,6 +138,7 @@ paths:
             application/json:
               schema: {$ref: "#/components/schemas/Run"}
         "400": {$ref: "#/components/responses/Error"}
+        "404": {$ref: "#/components/responses/Error"}
         "401": {$ref: "#/components/responses/Error"}
   /api/v1/runs/{runId}:
     get:
@@ -175,6 +176,51 @@ paths:
         "403": {$ref: "#/components/responses/Error"}
         "404": {$ref: "#/components/responses/Error"}
         "409": {$ref: "#/components/responses/Error"}
+  /api/v1/runs/{runId}/clarify:
+    post:
+      operationId: clarifyRun
+      description: Answer a NEEDS_CLARIFICATION run. The text is an extra grounding source for this run only; the blocked call is re-grounded and writes still pause for approval.
+      parameters:
+        - $ref: "#/components/parameters/RunId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/ClarifyRequest"}
+      responses:
+        "401": {$ref: "#/components/responses/Error"}
+        "413": {$ref: "#/components/responses/Error"}
+        "400": {$ref: "#/components/responses/Error"}
+        "200":
+          description: The run after continuing with the answer
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Run"}
+        "404": {$ref: "#/components/responses/Error"}
+        "409": {$ref: "#/components/responses/Error"}
+  /api/v1/conversations:
+    post:
+      operationId: createConversation
+      responses:
+        "401": {$ref: "#/components/responses/Error"}
+        "201":
+          description: An empty conversation owned by the caller's tenant
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Conversation"}
+  /api/v1/conversations/{conversationId}:
+    get:
+      operationId: getConversation
+      parameters:
+        - {name: conversationId, in: path, required: true, schema: {type: string, pattern: "^conv_[0-9a-f]{16}$"}}
+      responses:
+        "401": {$ref: "#/components/responses/Error"}
+        "200":
+          description: The conversation and its runs, oldest first. Another tenant's conversation is a 404.
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Conversation"}
+        "404": {$ref: "#/components/responses/Error"}
   /api/v1/runs/{runId}/reject:
     post:
       operationId: rejectRun
@@ -309,6 +355,24 @@ components:
       properties:
         query: {type: string, minLength: 1, maxLength: 4000}
         environment: {type: string, minLength: 1, maxLength: 64, default: sandbox}
+        conversation_id:
+          type: string
+          pattern: "^conv_[0-9a-f]{16}$"
+          description: Continue this conversation. Earlier turns are context for the model; only text the user typed grounds values. If the conversation's latest run is NEEDS_CLARIFICATION the message is routed to it as a clarification and that run is returned.
+    ClarifyRequest:
+      type: object
+      additionalProperties: false
+      required: [message]
+      properties:
+        message: {type: string, minLength: 1, maxLength: 4000}
+    Conversation:
+      type: object
+      required: [conversation_id, created_at, runs]
+      properties:
+        conversation_id: {type: string, pattern: "^conv_[0-9a-f]{16}$"}
+        created_at: {type: string, format: date-time}
+        created_by: {type: string}
+        runs: {type: array, items: {$ref: "#/components/schemas/Run"}}
     PendingApproval:
       type: object
       required: [step_id, skill_id, action_hash, environment, summary]
@@ -357,6 +421,7 @@ components:
           oneOf:
             - {$ref: "#/components/schemas/ModelUsage"}
             - {type: "null"}
+        conversation_id: {type: [string, "null"]}
     UIComponent:
       type: object
       required: [id, component, props]

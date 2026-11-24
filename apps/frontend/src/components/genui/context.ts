@@ -6,6 +6,8 @@ export interface GenUIActions {
   run: Run | null;
   decide: (approve: boolean) => void;
   busy: boolean;
+  /** Answers a NEEDS_CLARIFICATION run; absent where the page cannot (e.g. history). */
+  clarify?: (message: string) => void;
 }
 
 export const GenUIContext = createContext<GenUIActions>({

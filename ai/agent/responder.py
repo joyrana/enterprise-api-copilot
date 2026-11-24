@@ -12,11 +12,11 @@ from __future__ import annotations
 from pydantic import BaseModel, Field
 
 from ai.agent.contracts import RunState, RunStatus
-from ai.agent.planner_llm import render_observations, request_brief
+from ai.agent.planner_llm import context_block, request_brief
 from ai.agent.ui import catalog_for_prompt, selectable_components
 from ai.models.base import ModelProvider, ModelRequest, ModelUsage, generate_structured
 
-PROMPT_VERSION = "responder-v1"
+PROMPT_VERSION = "responder-v2"
 MAX_MESSAGE_CHARS = 6000
 
 SYSTEM = """You are the response writer of an enterprise API copilot. Write the reply \
@@ -94,7 +94,7 @@ class LLMResponder:
         request = ModelRequest(
             task="respond",
             system=SYSTEM + catalog_for_prompt(),
-            untrusted_context=render_observations(state),
+            untrusted_context=context_block(state),
             user=(
                 f"{request_brief(state)}\nRun status: {status}{details}\n"
                 f"System draft (accurate but terse):\n{state.message}\n\n"

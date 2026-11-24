@@ -115,6 +115,7 @@ func (a *app) apiDescribe(ctx context.Context, args []string) (int, error) {
 func (a *app) ask(ctx context.Context, args []string) (int, error) {
 	fs := flag.NewFlagSet("ask", flag.ContinueOnError)
 	env := fs.String("env", "sandbox", "")
+	conversation := fs.String("conversation", "", "")
 	positional, err := parse(fs, args)
 	if err != nil {
 		return ExitUsage, err
@@ -126,7 +127,47 @@ func (a *app) ask(ctx context.Context, args []string) (int, error) {
 	if err != nil {
 		return ExitError, err
 	}
-	run, err := c.CreateRun(ctx, strings.Join(positional, " "), *env)
+	run, err := c.CreateRunIn(ctx, strings.Join(positional, " "), *env, *conversation)
+	if err != nil {
+		return ExitError, err
+	}
+	return a.showRun(run, false)
+}
+
+func (a *app) conversationsNew(ctx context.Context, _ []string) (int, error) {
+	c, _, err := a.client(true)
+	if err != nil {
+		return ExitError, err
+	}
+	conv, err := c.CreateConversation(ctx)
+	if err != nil {
+		return ExitError, err
+	}
+	if a.format == output.JSON {
+		return ExitOK, output.WriteJSON(a.io.Out, conv)
+	}
+	a.printf("%s\nUse it with:  copilot ask --conversation %s \"...\"\n", conv.ConversationID, conv.ConversationID)
+	return ExitOK, nil
+}
+
+func (a *app) runsClarify(ctx context.Context, args []string) (int, error) {
+	fs := flag.NewFlagSet("runs clarify", flag.ContinueOnError)
+	positional, err := parse(fs, args)
+	if err != nil {
+		return ExitUsage, err
+	}
+	if len(positional) < 2 {
+		return ExitUsage, usagef("runs clarify needs RUN_ID and the answer text")
+	}
+	id, err := a.runID(positional[:1], "runs clarify")
+	if err != nil {
+		return ExitUsage, err
+	}
+	c, _, err := a.client(true)
+	if err != nil {
+		return ExitError, err
+	}
+	run, err := c.Clarify(ctx, id, strings.Join(positional[1:], " "))
 	if err != nil {
 		return ExitError, err
 	}

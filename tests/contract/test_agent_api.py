@@ -121,5 +121,35 @@ def test_start_resume_and_isolation(env: tuple[TestClient, Harness]) -> None:
     )
 
 
+def test_clarify_endpoint(env: tuple[TestClient, Harness]) -> None:
+    client, _ = env
+    started = call(
+        client,
+        "POST",
+        "/internal/v1/runs",
+        svc(ALICE),
+        json={
+            "query": "Create a payment for customer cust_acm0004",
+            "environment": "sandbox",
+            "conversation_id": "conv_0123456789abcdef",
+        },
+    )
+    assert started.status_code == 404  # unknown conversation, even with a valid service token
+    started = call(
+        client,
+        "POST",
+        "/internal/v1/runs",
+        svc(ALICE),
+        json={"query": "Create a payment for customer cust_acm0004", "environment": "sandbox"},
+    ).json()
+    assert started["status"] == "NEEDS_CLARIFICATION"
+    path = f"/internal/v1/runs/{started['run_id']}/clarify"
+    assert call(client, "POST", path, svc(GINA), json={"message": "₹100"}).status_code == 404
+    paused = call(client, "POST", path, svc(ALICE), json={"message": "₹100"}).json()
+    assert paused["status"] == "AWAITING_APPROVAL"
+    assert call(client, "POST", path, svc(ALICE), json={"message": "₹100"}).status_code == 409
+    assert call(client, "POST", path, svc(ALICE), json={}).status_code == 400
+
+
 def test_every_documented_operation_was_exercised() -> None:
     assert CONTRACT.operations() - CONTRACT.covered == set()
