@@ -209,3 +209,55 @@ def test_last_event_id_is_parsed_defensively() -> None:
     assert parse_last_event_id("7") == 7
     assert parse_last_event_id("-3") == 0 and parse_last_event_id("abc") == 0
     assert parse_last_event_id(None) == 0
+
+
+class GateResponder:
+    """Answers intent/plan at once but holds the final reply until released."""
+
+    name, model = "gate", "gate-1"
+
+    def __init__(self, outputs: list[str]) -> None:
+        self.inner = ScriptedModelProvider(outputs)
+        self.open = asyncio.Event()
+
+    async def generate(self, request: ModelRequest) -> ModelResponse:
+        if request.task == "respond":
+            await self.open.wait()
+        return await self.inner.generate(request)
+
+
+async def test_the_stream_does_not_close_while_the_reply_is_still_being_written() -> None:
+    h = build_harness()
+    llm = GateResponder(
+        [
+            intent("api_discovery"),
+            call("api.search", query="x"),
+            FINISH,
+            reply("ok", ("operation_list", "search")),
+        ]
+    )
+    store = InMemoryCheckpointStore()
+    runs = RunService(Orchestrator(h.services.runtime, llm=llm, checkpoints=store), store)
+    started = await runs.start_async(DEV, "find an api", "sandbox")
+    for _ in range(300):  # wait until the run reached COMPLETED but is still responding
+        state = runs.get(started.run_id, "acme")
+        if state.status is RunStatus.COMPLETED:
+            break
+        await asyncio.sleep(0.01)
+    assert state.status is RunStatus.COMPLETED and state.settled is False
+
+    frames: list[str] = []
+
+    async def follow() -> None:
+        async for frame in _frames(lambda: runs.get(started.run_id, "acme"), 0, poll_s=0.01):
+            frames.append(frame)
+
+    follower = asyncio.create_task(follow())
+    await asyncio.sleep(0.1)
+    assert not follower.done() and not any("event: status" in f for f in frames)
+    llm.open.set()
+    await asyncio.wait_for(follower, 10)
+    assert "event: ui" in "".join(frames) and frames[-1].startswith("id: ")
+    assert "event: status" in frames[-1]
+    final = runs.get(started.run_id, "acme")
+    assert final.settled is True and final.ui, "the reply and UI exist when the stream ends"

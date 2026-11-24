@@ -35,20 +35,14 @@ def parse_last_event_id(value: str | None) -> int:
         return 0
 
 
-_END_MARKERS = ("settled", "run_error")
-
-
 def _settled(state: RunState) -> bool:
-    """The run is no longer changing: not RUNNING, and its last segment wrote its end marker.
+    """The run is no longer changing: not RUNNING, and its last segment finished its reply and UI.
 
-    Runs stored before the marker existed have none anywhere; for those a non-RUNNING status
-    is final.
+    A status of COMPLETED is visible while the reply is still being written, so the status alone
+    is not final for a follower of the stream. Runs stored before ``settled`` existed (None)
+    are final as soon as they are not RUNNING.
     """
-    if state.status is RunStatus.RUNNING:
-        return False
-    if not any(e.kind in _END_MARKERS for e in state.events):
-        return True
-    return bool(state.events) and state.events[-1].kind in _END_MARKERS
+    return state.status is not RunStatus.RUNNING and state.settled is not False
 
 
 async def _frames(load: Callable[[], RunState], after: int, *, poll_s: float) -> AsyncIterator[str]:

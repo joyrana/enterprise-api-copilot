@@ -91,13 +91,13 @@ Status reflects code **with tests** in this repository. Full evidence, blockers 
 | API skills against a synthetic sandbox gateway (OAuth, scopes, tenants, 429s, fault injection) | ✅ Implemented, tested end to end |
 | Apigee runtime-proxy adapter (configured URL only, SSRF-safe) | ✅ Implemented · ⚠️ not tested against live Apigee |
 | Documentation RAG: BM25 + LSA hybrid (RRF), tenant filtering, citations, abstention | ✅ In-process + PostgreSQL/pgvector SQL · pretrained embedder pending |
-| LLM agent: LLM intent + grounded entities → intent resolver → bounded ReAct skill loop → LLM reply + generative UI | ✅ Qwen3 4B on a local mlx-lm server by default, tested with scripted models · no rules fallback: runs fail if the model is unavailable · 🚧 LangGraph adapter pending |
-| Platform API ([OpenAPI](contracts/openapi/platform-api.yaml)) and agent API ([OpenAPI](contracts/openapi/agent-service.yaml)) | ✅ Reference implementation, contract-tested · 🚧 Spring Boot implementation pending |
+| LLM agent: LLM intent + grounded entities → intent resolver → bounded ReAct skill loop → LLM reply + generative UI. Conversation memory, resumable clarification, grounding from earlier API results, async runs with SSE progress, a tenant-fair model queue | ✅ Qwen3 4B on a local mlx-lm server by default · tested with scripted models and evaluated on the real model ([36-case suite, 0 safety violations](docs/evaluation/README.md)) · no rules fallback: runs fail if the model is unavailable (except after an executed write, ADR-0011) · 🚧 LangGraph adapter pending |
+| Platform API ([OpenAPI](contracts/openapi/platform-api.yaml)) and agent API ([OpenAPI](contracts/openapi/agent-service.yaml)) | ✅ Python reference facade **and** Spring Boot implementation; the same contract suite passes against both |
 | Durable state: runs, single-use approvals, idempotency | ✅ SQLite (survives restarts and concurrent processes) · PostgreSQL driver pending |
 | Tracing: W3C `traceparent` from API → agent → skill → gateway | ✅ Implemented · OTel exporter pending |
-| Go CLI | ✅ Implemented (standard library only), tested end to end |
-| React web app: chat with approvals, run history | ✅ Wired to the real API; lint, type check, tests and production build pass in CI · component and accessibility tests pending |
-| Spring Boot backend | 🟡 Builds and passes CI (formatting, Checkstyle, unit tests) · scaffold only: platform API not implemented yet |
+| Go CLI | ✅ Implemented (standard library only), tested end to end · renders the agent's UI components as text, `--json` for raw output |
+| React web app: chat with live progress, clarification and approval panels, run history with the same components | ✅ Wired to the real API; lint, type check, Vitest and production build pass · accessibility tests pending |
+| Spring Boot backend (platform API: auth, runs, approvals, conversations, SSE; PostgreSQL + Flyway) | ✅ `mvn verify` passes (formatting, Checkstyle, 27 tests, ≥80 % coverage) · contract suite runs against the jar · 🟡 Spring Boot 3.5 line (4.x upgrade pending) · OIDC path untested against a real IdP |
 | Container images (backend, frontend, CLI) | ✅ Built and Trivy-scanned in CI |
 | Helm chart | 🚧 Scaffold / unverified |
 
@@ -187,10 +187,11 @@ make eval-smoke                 # evaluation with safety hard gates (non-zero ex
 ```bash
 ./setup.sh          # .venv (incl. debugpy), frontend, CLI, backend deps; creates .env with dev-only secrets
 ./dev.sh            # sandbox :8090 · platform API :8080 · agent API :8001 · web app :3000
+./dev.sh --with-backend   # the web app through the Spring Boot platform API on :8081 (PostgreSQL via Docker or a local instance)
 ./dev.sh --debug    # same, Python services listen for debugpy on 5678 · 5679 · 5680
 ```
 
-`./dev.sh sandbox platform` runs only the named services; `--with-backend` also starts PostgreSQL and Redis in Docker plus the Spring Boot backend on :8081. See `./dev.sh --help`.
+`./dev.sh sandbox platform` runs only the named services; `--with-backend` replaces the Python platform facade with the Spring Boot backend on :8081 (and starts PostgreSQL). Start the model first: `mlx_lm.server --model mlx-community/Qwen3-4B-Instruct-2507-4bit --port 8000`. See `./dev.sh --help`.
 
 **Debugging in VS Code:** run `./dev.sh --debug` (add `--wait` to break in start-up code), then pick **Attach: all Python services** in Run and Debug. Or use the **Launch:** configs to start a single service under the debugger. Configs live in [`.vscode/launch.json`](.vscode/launch.json).
 
@@ -243,6 +244,10 @@ Configuration uses environment variables (12-factor). Copy [`.env.example`](.env
 | `COPILOT_LLM_PROVIDER` | Agent model: `mlx` (local mlx-lm server), `anthropic` or `none` (deterministic) | `mlx` |
 | `COPILOT_LLM_MODEL` / `COPILOT_LLM_BASE_URL` | Model and OpenAI-compatible server URL | `mlx-community/Qwen3-4B-Instruct-2507-4bit` / `http://127.0.0.1:8000` |
 | `COPILOT_LLM_TIMEOUT_S` | Timeout for each model call | `120` |
+| `COPILOT_LLM_CONCURRENCY` / `COPILOT_LLM_QUEUE_MAX` | Model calls in flight (mlx-lm serves one) / runs allowed to queue before new runs get `429` + `Retry-After` | `1` / `8` |
+| `COPILOT_LLM_TRACE_PAYLOADS` | `1` writes redacted, capped prompts/replies to a local file (`COPILOT_LLM_TRACE_FILE`) | off |
+| `COPILOT_SERVICE_TOKEN_KEY` / `COPILOT_APPROVAL_KEY` (Spring) | The Spring backend signs service and approval tokens with the same keys the agent verifies with | — |
+| `COPILOT_AGENT_URL`, `COPILOT_DEV_TOKEN_ENABLED`, `COPILOT_OIDC_ISSUER_URI` (Spring) | Agent service URL · local sign-in endpoint · verify tokens against an OIDC issuer instead | `http://127.0.0.1:8001` / off / unset |
 | `COPILOT_JUDGE_PROVIDER` / `COPILOT_JUDGE_MODEL` | Opt-in LLM judge for evaluations | off |
 
 ## Evaluation
@@ -264,6 +269,20 @@ python -m evals.judge calibrate                  # LLM-judge agreement on the ca
 ```
 
 Settings are chosen on the `dev` split and reported on `test`. The live LLM-judge run has not been executed yet (it needs an API key).
+
+**LLM agent suite** (`python -m evals agent-llm --replay|--live`, [details](docs/evaluation/README.md)): 36 cases including 8 adversarial ones, run through the real orchestrator, runtime and sandbox. Measured against the real model (Qwen3 4B, mlx-lm), 2026-11-24:
+
+| Metric | Phase 2 baseline | After G6 (prompt hints, skill withdrawal, JSON tolerance) |
+|---|---|---|
+| Intent accuracy | 0.917 | 0.917 |
+| Skill-set precision / recall / F1 | 0.83 / 0.93 / 0.88 | 0.93 / 0.93 / 0.93 |
+| Argument exact match (n = 13) | 1.0 | 1.0 |
+| Model calls per run | 5.61 | 5.14 |
+| Rejected-decision rate | 0.29 | 0.20 |
+| Latency p50 / p95 | 16.6 s / 36.5 s | 16.9 s / 37.4 s |
+| **Safety violations** | **0** | **0** |
+
+PRs replay the recorded model outputs (deterministic, offline); a nightly workflow runs the suite against a live model. Replay checks everything around the model; only the live run measures the model.
 
 ## Observability
 

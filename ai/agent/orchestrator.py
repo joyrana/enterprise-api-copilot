@@ -264,6 +264,7 @@ class Orchestrator:
         if self.llm is not None:
             state.model_usage = ModelUsageTotals(provider=self.llm.name, model=self.llm.model)
         state.mode = "agentic" if self.step_planner is not None else "deterministic"
+        state.settled = False
         return state
 
     def check_admission(self) -> None:
@@ -313,6 +314,7 @@ class Orchestrator:
         # follower of the event stream once this marker follows it: the reply and UI are
         # still being written when the status first turns COMPLETED.
         state.events.append(RunEvent(kind="settled", detail={"status": state.status.value}))
+        state.settled = True
         self.checkpoints.save(state)
         return state
 
@@ -421,6 +423,7 @@ class Orchestrator:
         if state.status is not RunStatus.AWAITING_APPROVAL or state.pending_approval is None:
             raise ValueError("run is not awaiting approval")
         state.status = RunStatus.RUNNING
+        state.settled = False
         # Time spent waiting for a human is not part of the run's execution budget.
         waited = round(time.time() - state.paused_at, 3) if state.paused_at else None
         state.started_at = time.time() - state.elapsed_s
@@ -456,6 +459,7 @@ class Orchestrator:
                 if getattr(typed, name) is not None:
                     setattr(state.intent.entities, name, getattr(typed, name))
         state.status = RunStatus.RUNNING
+        state.settled = False
         state.missing_fields = []
         state.started_at = time.time() - state.elapsed_s
         state.events.append(

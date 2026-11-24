@@ -124,3 +124,15 @@ async def test_payload_capture_is_redacted_and_capped(
     assert JWT not in text and "AKIAIOSFODNN7EXAMPLE" not in text and "s3cr3tpass" not in text
     assert all(len(line["request"]) <= 6000 and len(line["response"]) <= 6000 for line in lines)
     llm.assert_clean()
+
+
+async def test_usage_counts_survive_the_run_views_secret_redaction() -> None:
+    from ai.api.runs import RunView
+
+    llm = Recorder([intent("api_discovery"), call("api.search", query="x"), FINISH, reply("ok")])
+    state = await _discovery(llm, SpanRecorder(), "find an api")
+    view = RunView.of(state)  # type: ignore[arg-type]
+    calls = [e.detail for e in view.timeline if e.kind == "model_call"]
+    # Keys containing "token" are redacted as credentials; usage must not be named that way.
+    assert calls and all(isinstance(c["usage_in"], int) and c["usage_in"] > 0 for c in calls)
+    assert all(c["usage_out"] != "[REDACTED]" for c in calls)

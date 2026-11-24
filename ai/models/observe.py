@@ -141,8 +141,9 @@ class CallObservation:
             "model": model,
             "prompt_version": self.prompt_version,
             "attempt": self.attempt,
-            "input_tokens": input_tokens,
-            "output_tokens": output_tokens,
+            # Not named *_tokens: run views redact keys that look like credentials ("token").
+            "usage_in": input_tokens,
+            "usage_out": output_tokens,
             "latency_ms": round(latency, 2),
             "outcome": outcome,
         }

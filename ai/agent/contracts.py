@@ -178,6 +178,9 @@ class RunState(BaseModel):
     blocked: BlockedStep | None = None
     # Values bound from earlier API results (G3): step id -> field -> {step_id, path}.
     provenance: dict[str, dict[str, dict[str, str]]] = Field(default_factory=dict)
+    # False while a run/resume/clarify segment is still producing its reply and UI (a status of
+    # COMPLETED is visible before that); None for runs stored before the field existed.
+    settled: bool | None = None
     started_at: float = 0.0
     paused_at: float | None = None
     elapsed_s: float = 0.0
