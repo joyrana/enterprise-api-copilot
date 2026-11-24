@@ -16,9 +16,19 @@ These principles are binding for code review. Each one names the mechanism that 
    scanned for instruction-like content, and can never change policy, target environment
    or arguments after approval.
 
-4. **Deterministic where possible.** Known operations use deterministic routing and
-   templated plans. Model calls are reserved for steps that need language understanding,
-   and every model output is parsed into a typed schema before use.
+4. **The model proposes; code decides.** An LLM classifies intent, plans each step in a
+   bounded loop and writes the reply and its UI. Every one of those outputs is a proposal
+   that deterministic code validates before it has an effect (ADR-0011):
+   - the planner can only call skills the intent resolver allowed, and only after
+     describing the operation it calls;
+   - argument values must be grounded in what the user typed (or in a successful API
+     result of the same run, with provenance) — never in model output or documents;
+   - principal, tenant, environment and permissions never come from the model, and a
+     write always pauses for an approval bound to the exact action hash;
+   - credentials are masked before any model request, and a model failure ends the run
+     explicitly — there is no silent rules/template fallback.
+   Determinism lives in the guardrails and in the tests (scripted models), not in the
+   choice of next step.
 
 5. **Bounded everything.** Plans have a maximum step count; the executor has tool-call,
    retry and wall-clock budgets; outbound HTTP has timeouts and response-size limits.

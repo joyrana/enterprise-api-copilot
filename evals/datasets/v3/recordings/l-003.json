@@ -1,0 +1,18 @@
+{
+ "case": "l-003",
+ "provider": "mlx",
+ "model": "mlx-community/Qwen3-4B-Instruct-2507-4bit",
+ "recorded_at": "2026-11-24T10:58:21.392011+00:00",
+ "prompt_versions": [
+  "intent=intent-v4",
+  "plan=planner-v5",
+  "respond=responder-v3"
+ ],
+ "latency_ms": 10950.2,
+ "outputs": [
+  "{\n  \"intent\": \"api_discovery\",\n  \"confidence\": 0.99,\n  \"rationale\": \"The request asks about the existence of an API to list customers, indicating discovery of available operations.\",\n  \"entities\": {\n    \"customer_id\": null,\n    \"order_id\": null,\n    \"payment_id\": null,\n    \"amount_minor\": null,\n    \"currency\": null,\n    \"status_codes\": [],\n    \"languages\": [],\n    \"status_filter\": null,\n    \"refund_reason\": null,\n    \"operation_hint\": \"list customers\"\n  }\n}",
+  "{\"thought\": \"Discover operations related to listing customers.\", \"action\": \"call\", \"skill_id\": \"api.search\", \"arguments\": {\"query\": \"list customers\", \"limit\": 5}}",
+  "{\"thought\": \"Search already found 'list customers' API\", \"action\": \"finish\", \"skill_id\": \"\", \"arguments\": {}}",
+  "{\"message\":\"Yes, there is an API to list customers. Use the `GET /v1/customers` endpoint to retrieve a list of customers.\\n\\n- **Operation**: `listCustomers`\\n- **Method**: `GET`\\n- **Path**: `/v1/customers`\\n- **Scopes required**: `customers:read`\",\"components\":[{\"component\":\"operation_list\",\"source\":\"search\"}]}"
+ ]
+}

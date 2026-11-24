@@ -1,0 +1,20 @@
+{
+ "case": "l-006",
+ "provider": "mlx",
+ "model": "mlx-community/Qwen3-4B-Instruct-2507-4bit",
+ "recorded_at": "2026-11-24T10:59:08.675719+00:00",
+ "prompt_versions": [
+  "intent=intent-v4",
+  "plan=planner-v5",
+  "respond=responder-v3"
+ ],
+ "latency_ms": 18349.5,
+ "outputs": [
+  "{\n  \"intent\": \"api_explanation\",\n  \"confidence\": 1,\n  \"rationale\": \"The request asks for an explanation of how the refundPayment operation works, indicating a need for operational details.\",\n  \"entities\": {\n    \"payment_id\": null,\n    \"customer_id\": null,\n    \"order_id\": null,\n    \"amount_minor\": null,\n    \"currency\": null,\n    \"status_codes\": [],\n    \"languages\": [],\n    \"status_filter\": null,\n    \"refund_reason\": null,\n    \"operation_hint\": \"refundPayment\"\n  }\n}",
+  "{\"thought\": \"Find details about the refundPayment operation\", \"action\": \"call\", \"skill_id\": \"api.search\", \"arguments\": {\"query\": \"refundPayment operation\"}}",
+  "{\"thought\": \"Find details about the refundPayment operation\", \"action\": \"call\", \"skill_id\": \"api.describe\", \"arguments\": {\"operation_id\": \"refundPayment\"}}",
+  "{\"thought\": \"Explanation of refundPayment operation requires detailed parameters and responses.\", \"action\": \"call\", \"skill_id\": \"api.describe\", \"arguments\": {\"operation_id\": \"refundPayment\"}}",
+  "{\"thought\": \"Explained refundPayment operation details including parameters and responses.\", \"action\": \"finish\"}",
+  "{\n  \"message\": \"The `refundPayment` operation issues a full or partial refund for a captured or authorized payment. It requires the `refunds:write` scope and sends a POST request to `/v1/payments/{payment_id}/refunds`.\\n\\n**Request body**: `amount` (integer, in smallest currency unit), and optionally `reason` (string, e.g., 'requested_by_customer').\\n\\n**Response codes**:\\n- 201: Refund created\\n- 403: Token lacks `refunds:write` scope\\n- 422: Refund amount exceeds refundable balance\",\n  \"components\": [\n    {\n      \"component\": \"operation_detail\",\n      \"source\": \"describe\"\n    },\n    {\n      \"component\": \"code_snippets\",\n      \"source\": \"\"\n    }\n  ]\n}"
+ ]
+}

@@ -1,0 +1,18 @@
+{
+ "case": "l-001",
+ "provider": "mlx",
+ "model": "mlx-community/Qwen3-4B-Instruct-2507-4bit",
+ "recorded_at": "2026-11-24T10:57:57.901907+00:00",
+ "prompt_versions": [
+  "intent=intent-v4",
+  "plan=planner-v5",
+  "respond=responder-v3"
+ ],
+ "latency_ms": 10842.1,
+ "outputs": [
+  "{\n  \"intent\": \"api_discovery\",\n  \"confidence\": 1,\n  \"rationale\": \"The request asks for the API that refunds a payment, indicating discovery of an endpoint operation.\",\n  \"entities\": {\n    \"payment_id\": null,\n    \"customer_id\": null,\n    \"order_id\": null,\n    \"amount_minor\": null,\n    \"currency\": null,\n    \"status_codes\": [],\n    \"languages\": [],\n    \"status_filter\": null,\n    \"refund_reason\": null,\n    \"operation_hint\": \"refund a payment\"\n  }\n}",
+  "{\"thought\": \"Search for API operations related to refunding a payment.\", \"action\": \"call\", \"skill_id\": \"api.search\", \"arguments\": {\"query\": \"refund a payment\", \"limit\": 5, \"mode\": \"hybrid\"}}",
+  "{\"thought\": \"Search result directly answers the request about refunding a payment.\", \"action\": \"finish\", \"skill_id\": \"\", \"arguments\": {}}",
+  "{\"message\":\"The API that refunds a payment is `refundPayment` (POST /v1/payments/{payment_id}/refunds).\",\"components\":[{\"component\":\"operation_list\",\"source\":\"search\"}]}"
+ ]
+}

@@ -18,7 +18,9 @@ import pytest
 
 from ai.storage.sql_store import STATEMENTS
 
-SQL = Path(__file__).resolve().parents[2] / "ai" / "storage" / "sql" / "V001__runtime.postgres.sql"
+SQL_DIR = Path(__file__).resolve().parents[2] / "ai" / "storage" / "sql"
+SQL = SQL_DIR / "V001__runtime.postgres.sql"
+SQL_V2 = SQL_DIR / "V002__conversations.postgres.sql"
 PGURL = os.environ.get("COPILOT_TEST_PGURL")
 pytestmark = [
     pytest.mark.integration,
@@ -60,8 +62,13 @@ def run(name: str, *params: object) -> list[str]:
 
 @pytest.fixture(scope="module", autouse=True)
 def schema() -> None:
-    psql("DROP TABLE IF EXISTS runtime_runs, runtime_used_approvals, runtime_idempotency;")
+    psql(
+        "DROP TABLE IF EXISTS runtime_conversation_runs, runtime_conversations, runtime_runs, "
+        "runtime_used_approvals, runtime_idempotency;"
+    )
     psql(SQL.read_text(encoding="utf-8"))
+    psql(SQL_V2.read_text(encoding="utf-8"))
+    psql(SQL_V2.read_text(encoding="utf-8"))  # idempotent: the store re-applies it on start
 
 
 def test_runs_statements() -> None:
@@ -92,3 +99,20 @@ def test_idempotency_first_write_wins() -> None:
     run("put_idem", "acme", "k", "b" * 64, '{"ok": false}', 2)
     assert run("get_idem", "acme", "k") == ["a" * 64 + '|{"ok": true}']
     assert run("get_idem", "globex", "k") == []
+
+
+def test_conversation_statements_are_tenant_scoped() -> None:
+    cid = "conv_0123456789abcdef"
+    run("create_conversation", cid, "acme", "alice", 1000)
+    assert run("get_conversation", cid, "acme") == [f"{cid}|acme|alice|1000"]
+    assert run("get_conversation", cid, "globex") == []  # another tenant: indistinguishable
+    # add_conversation_run (run, conv, tenant, at, conv, tenant): only into the owner's conversation
+    run("add_conversation_run", "run_0000000000000001", cid, "acme", 1001, cid, "acme")
+    run(
+        "add_conversation_run", "run_0000000000000001", cid, "acme", 1002, cid, "acme"
+    )  # idempotent
+    run("add_conversation_run", "run_0000000000000002", cid, "globex", 1003, cid, "globex")
+    assert run("conversation_runs", cid, "acme") == ["run_0000000000000001"]
+    assert run("conversation_runs", cid, "globex") == []
+    with pytest.raises(AssertionError):
+        run("create_conversation", "bogus", "acme", "alice", 1)  # CHECK constraint on the id

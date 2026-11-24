@@ -11,24 +11,24 @@ import java.time.Instant;
 import lombok.Builder;
 import lombok.Value;
 
-/** Standardized error response returned by all REST endpoints on failure. */
+/** The platform error body ({@code ApiError} in platform-api.yaml). */
 @Value
 @Builder
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class ApiErrorResponse {
 
-  /** Machine-readable error code (e.g., {@code RESOURCE_NOT_FOUND}). */
+  /** Machine-readable error code (for example {@code RESOURCE_NOT_FOUND}). */
   private String code;
 
-  /** Human-readable error message safe for display to end users. */
+  /** Human-readable message safe for display to end users. */
   private String message;
 
-  /** Unique identifier for this request — use for support correlation. */
+  /** Identifier of the request, for support correlation. */
   private String requestId;
 
   /** The request path that triggered the error. */
   private String path;
 
-  /** Timestamp when the error occurred. */
+  /** When the error occurred. */
   private Instant timestamp;
 }

@@ -158,3 +158,54 @@ def test_cli_full_approval_workflow(stack: dict[str, object]) -> None:
 
     config = Path(str(stack["tmp"])) / "cfg-alice" / "copilot" / "config.json"
     assert oct(config.stat().st_mode & 0o777) == "0o600"
+
+
+def test_cli_renders_discovery_components_as_text(stack: dict[str, object]) -> None:
+    assert cli(stack, "alice", "login", "--user", "alice").returncode == 0
+    ask = cli(stack, "alice", "ask", "Which API refunds a payment?")
+    assert ask.returncode == 0, ask.stderr
+    assert "== Matching operations ==" in ask.stdout
+    row = next(line for line in ask.stdout.splitlines() if line.startswith("refundPayment"))
+    assert "POST" in row and "refunds:write" in row
+    raw = cli(stack, "alice", "--json", "ask", "Which API refunds a payment?")
+    assert raw.returncode == 0 and raw.stdout.lstrip().startswith("{")
+    assert any(
+        c["component"] == "operation_list"
+        for c in httpx.Response(200, content=raw.stdout).json()["ui"]
+    )
+
+
+def test_cli_write_shows_the_approval_prompt_with_the_action_hash(stack: dict[str, object]) -> None:
+    assert cli(stack, "alice", "login", "--user", "alice").returncode == 0
+    assert cli(stack, "priya", "login", "--user", "priya").returncode == 0
+    ask = cli(stack, "alice", "ask", "Create a payment of ₹400 for customer cust_acm0003")
+    assert ask.returncode == 3, ask.stderr
+    assert "== Approval required ==" in ask.stdout and "action hash: " in ask.stdout
+    run_id = next(w for w in ask.stdout.split() if w.startswith("run_")).strip("(),")
+    action_hash = ask.stdout.split("action hash: ", 1)[1].split()[0]
+    assert len(action_hash) == 64
+    approved = cli(stack, "priya", "runs", "approve", run_id, "--yes")
+    assert approved.returncode == 0, approved.stderr
+    assert "== API response ==" in approved.stdout and "succeeded with HTTP 201" in approved.stdout
+
+
+def test_cli_clarification_resume(stack: dict[str, object]) -> None:
+    assert cli(stack, "alice", "login", "--user", "alice").returncode == 0
+    assert cli(stack, "priya", "login", "--user", "priya").returncode == 0
+    payments = stack["sandbox"].state.sandbox.tenant("acme").payments  # type: ignore[attr-defined]
+    before = len(payments)
+    ask = cli(stack, "alice", "ask", "Create a payment for customer cust_acm0002")
+    assert ask.returncode == 3, ask.stderr
+    assert (
+        "== More information needed ==" in ask.stdout and "Missing: amount, currency" in ask.stdout
+    )
+    run_id = next(w for w in ask.stdout.split() if w.startswith("run_")).strip("(),")
+    assert f"copilot runs clarify {run_id}" in ask.stdout
+
+    resumed = cli(stack, "alice", "runs", "clarify", run_id, "₹750")
+    assert resumed.returncode == 3, resumed.stderr  # now waits for an approver
+    assert "== Approval required ==" in resumed.stdout and '"amount": 75000' in resumed.stdout
+    assert len(payments) == before
+    approved = cli(stack, "priya", "runs", "approve", run_id, "--yes")
+    assert approved.returncode == 0 and "HTTP 201" in approved.stdout
+    assert len(payments) == before + 1

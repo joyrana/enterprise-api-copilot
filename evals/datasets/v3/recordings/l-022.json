@@ -1,0 +1,19 @@
+{
+ "case": "l-022",
+ "provider": "mlx",
+ "model": "mlx-community/Qwen3-4B-Instruct-2507-4bit",
+ "recorded_at": "2026-11-24T11:04:16.395696+00:00",
+ "prompt_versions": [
+  "intent=intent-v4",
+  "plan=planner-v5"
+ ],
+ "latency_ms": 23171.2,
+ "outputs": [
+  "{\n  \"intent\": \"api_execution\",\n  \"confidence\": 0.99,\n  \"rationale\": \"The request specifies a concrete payment ID and asks to refund it, indicating a direct action to be performed on a specific payment.\",\n  \"entities\": {\n    \"payment_id\": \"pay_acm00000002\",\n    \"amount_minor\": 10000,\n    \"currency\": \"₹\",\n    \"operation_hint\": \"refund a payment\"\n  }\n}",
+  "{\"thought\": \"Find operation to refund a payment\", \"action\": \"call\", \"skill_id\": \"api.search\", \"arguments\": {\"query\": \"refund a payment\", \"limit\": 5}}",
+  "{\"thought\": \"Find details of the payment to refund\", \"action\": \"call\", \"skill_id\": \"api.call.read\", \"arguments\": {\"operation_id\": \"getPayment\", \"path_params\": {\"payment_id\": \"pay_acm00000002\"}}}",
+  "{\"thought\": \"Find the refund operation to initiate a refund for the duplicate payment.\", \"action\": \"call\", \"skill_id\": \"api.search\", \"arguments\": {\"query\": \"refund a payment\", \"limit\": 5}}",
+  "{\"thought\": \"Identify the refund operation for the specified payment.\", \"action\": \"call\", \"skill_id\": \"api.search\", \"arguments\": {\"query\": \"refund a payment\", \"limit\": 5}}",
+  "{\"thought\": \"Find the refund operation to initiate a refund for the duplicate payment.\", \"action\": \"call\", \"skill_id\": \"api.call.write\", \"arguments\": {\"operation_id\": \"refundPayment\", \"path_params\": {\"payment_id\": \"pay_acm00000002\"}, \"body\": {\"amount\": 10000, \"reason\": \"duplicate\"}}}"
+ ]
+}

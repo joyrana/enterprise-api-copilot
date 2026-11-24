@@ -16,7 +16,7 @@ from ai.agent.planner_llm import context_block, request_brief
 from ai.agent.ui import catalog_for_prompt, selectable_components
 from ai.models.base import ModelProvider, ModelRequest, ModelUsage, generate_structured
 
-PROMPT_VERSION = "responder-v2"
+PROMPT_VERSION = "responder-v3"
 MAX_MESSAGE_CHARS = 6000
 
 SYSTEM = """You are the response writer of an enterprise API copilot. Write the reply \
@@ -27,6 +27,8 @@ Writing rules:
 the key result values (ids, statuses, amounts, HTTP status) from the observations.
 - API amounts are integers in the smallest currency unit: 125000 with INR is ₹1,250.00 \
 (paise), 5000 with USD is $50.00 (cents). Convert before stating an amount.
+- Every record in the observations belongs to the caller's own tenant. Never present it as \
+another tenant's data; if the user asked for another tenant's data, say it is not available.
 - Use only facts present in the observations. Never invent operations, fields, values, \
 ids or documentation. If the observations do not answer the request, say so plainly.
 - Name operations in backticks (e.g. `createPayment`). Cite [marker] numbers only for \
@@ -61,7 +63,10 @@ class LLMResponder:
         self.name = f"llm-responder:{provider.name}/{provider.model}"
         self.last_usage: ModelUsage | None = None
 
-    async def respond(self, state: RunState) -> tuple[str, list[tuple[str, str]]]:
+    async def respond(
+        self, state: RunState, feedback: str | None = None
+    ) -> tuple[str, list[tuple[str, str]]]:
+        """``feedback`` corrects a previous reply (e.g. identifiers no step produced)."""
         step_ids = list(state.results)
         schema = {
             "type": "object",
@@ -99,6 +104,7 @@ class LLMResponder:
                 f"{request_brief(state)}\nRun status: {status}{details}\n"
                 f"System draft (accurate but terse):\n{state.message}\n\n"
                 "Write the reply and choose components."
+                + (f"\n\nYour previous reply was rejected: {feedback}" if feedback else "")
             ),
             prompt_version=PROMPT_VERSION,
             max_output_tokens=1500,

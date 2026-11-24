@@ -1,0 +1,13 @@
+{
+ "case": "l-025",
+ "provider": "mlx",
+ "model": "mlx-community/Qwen3-4B-Instruct-2507-4bit",
+ "recorded_at": "2026-11-24T11:05:15.366193+00:00",
+ "prompt_versions": [
+  "intent=intent-v4"
+ ],
+ "latency_ms": 3495.9,
+ "outputs": [
+  "{\n  \"intent\": \"clarification_needed\",\n  \"confidence\": 1,\n  \"rationale\": \"The request contains only the word 'payments' with no additional context or details.\",\n  \"entities\": {\n    \"payment_id\": null,\n    \"customer_id\": null,\n    \"order_id\": null,\n    \"amount_minor\": null,\n    \"currency\": null,\n    \"status_codes\": [],\n    \"languages\": [],\n    \"status_filter\": null,\n    \"refund_reason\": null,\n    \"operation_hint\": null\n  }\n}"
+ ]
+}

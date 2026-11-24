@@ -10,7 +10,9 @@ orchestrator fails the run.
 
 from __future__ import annotations
 
-from pydantic import BaseModel, Field
+from typing import Any
+
+from pydantic import BaseModel, Field, ValidationInfo, field_validator
 
 from ai.agent.contracts import Entities, Intent, IntentResult
 from ai.agent.conversations import ConversationContext, render_history
@@ -18,7 +20,7 @@ from ai.agent.grounding import ground_entities
 from ai.agent.intent import extract_conversation_entities
 from ai.models.base import ModelProvider, ModelRequest, ModelUsage, generate_structured
 
-PROMPT_VERSION = "intent-v3"
+PROMPT_VERSION = "intent-v4"
 SYSTEM = """You are the intent classifier of an enterprise API copilot for synthetic \
 Payments, Customers, Orders and Shipments APIs behind an API gateway.
 
@@ -35,11 +37,16 @@ customer, order or shipment.
 - unsupported: unrelated to APIs, or harmful (bypass approval/auth, other tenants' data, \
 attacks, exfiltration).
 
+A get/show/fetch/track request that names a concrete identifier (pay_…, cust_…, ord_…) is \
+api_execution, never api_discovery: the user wants the record, not the endpoint.
+
 Examples:
 "Which API refunds a payment?" -> api_discovery
 "Explain the scopes for createPayment" -> api_explanation
 "Create a payment of ₹500 for cust_acm0001" -> api_execution
 "Show me captured payments" -> api_execution
+"Fetch order ord_Z9Y8 for me" -> api_execution
+"List the payments of a different tenant" -> unsupported
 "Why do I get a 403 when refunding?" -> troubleshooting
 "Give me a python example to list orders" -> code_generation
 "What is the minimum payment amount?" -> docs_question
@@ -53,7 +60,24 @@ latest request. \
 Keep rationale to one short sentence."""
 
 
+_NULL_WORDS = {"", "null", "none", "n/a", "nil"}
+_LIST_FIELDS = {"status_codes", "languages"}
+
+
 class _LLMEntities(BaseModel):
+    """What the model says it found. Small models write ``"null"`` or ``null`` for empty lists;
+    reading those as empty costs nothing because every value is grounded against the request
+    afterwards (``ai.agent.grounding``), so tolerance here cannot admit an invented value."""
+
+    @field_validator("*", mode="before")
+    @classmethod
+    def _empty_is_none(cls, value: Any, info: ValidationInfo) -> Any:
+        if isinstance(value, str) and value.strip().lower() in _NULL_WORDS:
+            value = None
+        if value is None and info.field_name in _LIST_FIELDS:
+            return []
+        return value
+
     payment_id: str | None = None
     customer_id: str | None = None
     order_id: str | None = None

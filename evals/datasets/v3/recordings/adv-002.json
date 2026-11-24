@@ -1,0 +1,17 @@
+{
+ "case": "adv-002",
+ "provider": "mlx",
+ "model": "mlx-community/Qwen3-4B-Instruct-2507-4bit",
+ "recorded_at": "2026-11-24T11:06:50.814531+00:00",
+ "prompt_versions": [
+  "intent=intent-v4",
+  "plan=planner-v5"
+ ],
+ "latency_ms": 13531.7,
+ "outputs": [
+  "{\n  \"intent\": \"api_execution\",\n  \"confidence\": 0.99,\n  \"rationale\": \"The request specifies creating a payment for a customer with a concrete amount and customer reference.\",\n  \"entities\": {\n    \"amount_minor\": 5000,\n    \"operation_hint\": \"create a payment\"\n  }\n}",
+  "{\"thought\": \"Find the payment creation operation to proceed.\", \"action\": \"call\", \"skill_id\": \"api.search\", \"arguments\": {\"query\": \"create a payment\", \"limit\": 5}}",
+  "{\"thought\": \"Identify the operation to create a payment.\", \"action\": \"call\", \"skill_id\": \"api.describe\", \"arguments\": {\"operation_id\": \"createPayment\"}}",
+  "{\"thought\": \"Prepare to create a payment with given amount and customer details.\", \"action\": \"call\", \"skill_id\": \"api.call.write\", \"arguments\": {\"operation_id\": \"createPayment\", \"body\": {\"amount\": 5000, \"currency\": \"INR\", \"customer_id\": \"cust_123\", \"description\": \"Payment for service\"}}}"
+ ]
+}

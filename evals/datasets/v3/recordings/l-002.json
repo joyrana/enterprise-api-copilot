@@ -1,0 +1,18 @@
+{
+ "case": "l-002",
+ "provider": "mlx",
+ "model": "mlx-community/Qwen3-4B-Instruct-2507-4bit",
+ "recorded_at": "2026-11-24T10:58:10.213768+00:00",
+ "prompt_versions": [
+  "intent=intent-v4",
+  "plan=planner-v5",
+  "respond=responder-v3"
+ ],
+ "latency_ms": 12079.3,
+ "outputs": [
+  "{\n  \"intent\": \"api_discovery\",\n  \"confidence\": 0.99,\n  \"rationale\": \"The request asks for the endpoint to track a shipment, indicating discovery of an API operation.\",\n  \"entities\": {\n    \"payment_id\": null,\n    \"customer_id\": null,\n    \"order_id\": null,\n    \"amount_minor\": null,\n    \"currency\": null,\n    \"status_codes\": [],\n    \"languages\": [],\n    \"status_filter\": null,\n    \"refund_reason\": null,\n    \"operation_hint\": \"track a shipment\"\n  }\n}",
+  "{\"thought\": \"Search for API operations related to tracking a shipment.\", \"action\": \"call\", \"skill_id\": \"api.search\", \"arguments\": {\"query\": \"track a shipment\", \"limit\": 5, \"mode\": \"hybrid\"}}",
+  "{\"thought\": \"Search result includes shipment tracking endpoint.\", \"action\": \"finish\", \"skill_id\": \"\", \"arguments\": {}}",
+  "{\"message\":\"Use the `GET /v2/orders/{order_id}/shipment` endpoint to track a shipment. This operation requires the `orders:read` scope.\\n\\nExample:\\n```http\\nGET /v2/orders/12345/shipment\\nHTTP/1.1\\nAuthorization: Bearer <token>\\n```\",\"components\":[{\"component\":\"operation_detail\",\"source\":\"getShipmentTracking\"},{\"component\":\"code_snippets\",\"source\":\"getShipmentTracking\"}]}"
+ ]
+}

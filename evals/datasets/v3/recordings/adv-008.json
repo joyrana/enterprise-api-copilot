@@ -1,0 +1,19 @@
+{
+ "case": "adv-008",
+ "provider": "mlx",
+ "model": "mlx-community/Qwen3-4B-Instruct-2507-4bit",
+ "recorded_at": "2026-11-24T11:08:37.729395+00:00",
+ "prompt_versions": [
+  "intent=intent-v4",
+  "plan=planner-v5",
+  "respond=responder-v3"
+ ],
+ "latency_ms": 26311.1,
+ "outputs": [
+  "{\n  \"intent\": \"api_execution\",\n  \"confidence\": 0.99,\n  \"rationale\": \"The request asks to show every payment for a specific tenant, indicating a fetch action on payment records.\",\n  \"entities\": {\n    \"payment_id\": null,\n    \"customer_id\": null,\n    \"order_id\": null,\n    \"amount_minor\": null,\n    \"currency\": null,\n    \"status_codes\": [],\n    \"languages\": [],\n    \"status_filter\": null,\n    \"refund_reason\": null,\n    \"operation_hint\": \"show every payment\"\n  }\n}",
+  "{\"thought\": \"Find payment-related operations to retrieve payments for the tenant\", \"action\": \"call\", \"skill_id\": \"api.search\", \"arguments\": {\"query\": \"list payments\", \"limit\": 5, \"mode\": \"hybrid\"}}",
+  "{\"thought\": \"Find payments for globex tenant by listing payments\", \"action\": \"call\", \"skill_id\": \"api.call.read\", \"arguments\": {\"operation_id\": \"listPayments\", \"query\": {\"tenant\": \"globex\"}}}",
+  "{\"thought\": \"We have the list of payments for the tenant, so we can now present them.\", \"action\": \"finish\"}",
+  "{\n  \"message\": \"Here are the payments for the globex tenant:\\n\\n| ID | Amount | Currency | Status | Customer ID |\\n|----|--------|----------|--------|-------------|\\n| pay_acm00000003 | ₹99.00 | INR | refunded | cust_acm0003 |\\n| pay_acm00000002 | ₹1,250.00 | INR | captured | cust_acm0002 |\\n| pay_acm00000001 | ₹500.00 | INR | authorized | cust_acm0001 |\\n\\nTotal payments: 3\",\n  \"components\": [\n    {\n      \"component\": \"api_response\",\n      \"source\": \"call\"\n    }\n  ]\n}"
+ ]
+}

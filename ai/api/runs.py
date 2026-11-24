@@ -25,11 +25,13 @@ from ai.agent.contracts import (
 )
 from ai.agent.conversations import (
     Conversation,
+    ConversationContext,
     ConversationStore,
     InMemoryConversationStore,
     build_context,
 )
 from ai.agent.orchestrator import CheckpointStore, Orchestrator
+from ai.models.limiter import ModelBusyError
 from ai.storage.sql_store import SqlRuntimeStore
 from skills.runtime.approval_service import ApprovalService
 from skills.runtime.contracts import Principal
@@ -124,6 +126,7 @@ class RunService:
             store if isinstance(store, SqlRuntimeStore) else InMemoryConversationStore()
         )
         self._locks: dict[str, asyncio.Lock] = {}
+        self._tasks: set[asyncio.Task[None]] = set()
 
     def _lock(self, run_id: str) -> asyncio.Lock:
         return self._locks.setdefault(run_id, asyncio.Lock())
@@ -162,6 +165,18 @@ class RunService:
                 states.append(state)
         return states
 
+    def _context_for(
+        self, principal: Principal, conversation_id: str | None
+    ) -> tuple[ConversationContext | None, RunState | None]:
+        """Earlier-turn context, plus the run (if any) that is waiting for an answer."""
+        if conversation_id is None:
+            return None, None
+        conversation = self.conversation_for(conversation_id, principal)
+        previous = self.conversation_runs(conversation)
+        if previous and self.orchestrator.awaiting_clarification(previous[-1]):
+            return None, previous[-1]
+        return build_context(previous), None
+
     async def start(
         self,
         principal: Principal,
@@ -169,14 +184,10 @@ class RunService:
         environment: str,
         conversation_id: str | None = None,
     ) -> RunState:
-        context = None
-        if conversation_id is not None:
-            conversation = self.conversation_for(conversation_id, principal)
-            previous = self.conversation_runs(conversation)
-            if previous and self.orchestrator.awaiting_clarification(previous[-1]):
-                # A plain next message while a run waits for an answer is that answer.
-                return await self.clarify(previous[-1].run_id, principal, query)
-            context = build_context(previous)
+        context, waiting = self._context_for(principal, conversation_id)
+        if waiting is not None:
+            # A plain next message while a run waits for an answer is that answer.
+            return await self.clarify(waiting.run_id, principal, query)
         state = await self.orchestrator.run(
             query,
             principal=principal,
@@ -191,6 +202,64 @@ class RunService:
                 conversation_id, state.run_id, principal.tenant_id
             )
         return state
+
+    async def start_async(
+        self,
+        principal: Principal,
+        query: str,
+        environment: str,
+        conversation_id: str | None = None,
+    ) -> RunState:
+        """Create the run, return it as RUNNING, and execute it in the background.
+
+        Progress is readable through ``get`` / the event stream. Raises ``ModelBusyError``
+        (before anything is created) when the model queue is full.
+        """
+        context, waiting = self._context_for(principal, conversation_id)
+        if waiting is not None:
+            return await self.clarify(waiting.run_id, principal, query)
+        self.orchestrator.check_admission()
+        state = self.orchestrator.new_state(
+            query,
+            principal=principal,
+            environment=environment,
+            conversation_id=conversation_id,
+            context=context,
+        )
+        state.events.append(RunEvent(kind="created", detail={"at": state.started_at}))
+        self.store.save(state)
+        if conversation_id is not None:
+            self.conversations.add_conversation_run(
+                conversation_id, state.run_id, principal.tenant_id
+            )
+        task = asyncio.create_task(self._execute_in_background(state, principal, query))
+        self._tasks.add(task)
+        task.add_done_callback(self._tasks.discard)
+        return state.model_copy(deep=True)
+
+    async def _execute_in_background(
+        self, state: RunState, principal: Principal, query: str
+    ) -> None:
+        try:
+            await self.orchestrator.run(
+                query,
+                principal=principal,
+                environment=state.environment,
+                conversation_id=state.conversation_id,
+                state=state,
+            )
+        except Exception as exc:  # the caller already has a run id: end it visibly
+            busy = isinstance(exc, ModelBusyError)
+            state.status = RunStatus.FAILED
+            state.message = (
+                f"The model is busy; try again in about {exc.retry_after_s}s."
+                if isinstance(exc, ModelBusyError)
+                else "The run stopped unexpectedly."
+            )
+            state.events.append(
+                RunEvent(kind="run_error", detail={"type": type(exc).__name__, "model_busy": busy})
+            )
+            self.store.save(state)
 
     async def clarify(self, run_id: str, principal: Principal, message: str) -> RunState:
         async with self._lock(run_id):
@@ -243,12 +312,20 @@ class RunService:
             self.store.save(resumed)
             return resumed
 
-    async def resume_with_token(self, run_id: str, tenant_id: str, approval_token: str) -> RunState:
+    async def resume_with_token(
+        self, run_id: str, tenant_id: str, approval_token: str, approver: str | None = None
+    ) -> RunState:
+        """Continue after an approval minted elsewhere (the platform owns approvals).
+
+        ``approver`` (the subject the platform vetted) is recorded as an ``approved`` event.
+        """
         async with self._lock(run_id):
             state = self.get(run_id, tenant_id)
             if state.status is not RunStatus.AWAITING_APPROVAL:
                 raise RunConflictError("run is not awaiting approval")
             resumed = await self.orchestrator.resume(run_id, approval_token=approval_token)
+            if approver is not None:
+                resumed.events.append(RunEvent(kind="approved", detail={"approver": approver}))
             self.store.save(resumed)
             return resumed
 

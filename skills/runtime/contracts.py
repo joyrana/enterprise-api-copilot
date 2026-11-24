@@ -105,6 +105,10 @@ class SkillDefinition(Generic[InputT, OutputT]):
     audit_required: bool = True
     error_codes: frozenset[SkillErrorCode] = frozenset()
     preflight: Preflight[InputT] | None = None
+    # Intents this skill may serve (plain strings: ``skills`` does not import ``ai.agent``).
+    # The agent's intent resolver is built from these, so adding a skill needs no resolver edit.
+    intents: frozenset[str] = frozenset()
+    order: int = 100  # position in a skill list shown to a planner (lower first)
 
     def __post_init__(self) -> None:
         if self.side_effect.requires_approval and not self.idempotency_required:

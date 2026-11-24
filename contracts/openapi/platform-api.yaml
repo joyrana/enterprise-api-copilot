@@ -125,6 +125,9 @@ paths:
         "401": {$ref: "#/components/responses/Error"}
     post:
       operationId: createRun
+      description: Runs the request. mode=sync (default) returns 201 when the run completes or pauses; mode=async returns 202 with the run in RUNNING state and executes it in the background (follow it with GET /runs/{runId}/events or GET /runs/{runId}). A full model queue yields 429 with Retry-After and creates no run.
+      parameters:
+        - {name: mode, in: query, schema: {type: string, enum: [sync, async], default: sync}}
       requestBody:
         required: true
         content:
@@ -140,6 +143,33 @@ paths:
         "400": {$ref: "#/components/responses/Error"}
         "404": {$ref: "#/components/responses/Error"}
         "401": {$ref: "#/components/responses/Error"}
+        "202":
+          description: Accepted (mode=async); the run is RUNNING
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Run"}
+        "429":
+          description: The model queue is full; retry after the Retry-After seconds
+          headers:
+            Retry-After: {schema: {type: integer, minimum: 1}}
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/ApiError"}
+  /api/v1/runs/{runId}/events:
+    get:
+      operationId: streamRunEvents
+      description: Server-Sent Events for a run. One message per timeline event (event name = kind, id = 1-based position, data = redacted TimelineEvent), then a final "status" event, then the stream closes. Resume with the Last-Event-ID header. Another tenant's run is a 404.
+      parameters:
+        - $ref: "#/components/parameters/RunId"
+        - {name: Last-Event-ID, in: header, schema: {type: integer, minimum: 0}}
+      responses:
+        "401": {$ref: "#/components/responses/Error"}
+        "200":
+          description: Event stream
+          content:
+            text/event-stream:
+              schema: {type: string}
+        "404": {$ref: "#/components/responses/Error"}
   /api/v1/runs/{runId}:
     get:
       operationId: getRun
@@ -443,6 +473,7 @@ components:
         input_tokens: {type: integer, minimum: 0}
         output_tokens: {type: integer, minimum: 0}
         latency_ms: {type: number, minimum: 0}
+        queue_wait_s: {type: number, minimum: 0, description: Time spent waiting for a model slot; not counted against the run's time budget}
         failures: {type: integer, minimum: 0, description: Model calls that were unreachable or returned invalid output; any failure ends the run as FAILED}
     ApproveRequest:
       type: object

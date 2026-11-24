@@ -5,8 +5,11 @@
 #   ./dev.sh sandbox platform        only the named services
 #   ./dev.sh --debug                 Python services run under debugpy (attach from VS Code)
 #   ./dev.sh --debug --wait          ...and block until a debugger attaches
-#   ./dev.sh --with-backend          also start PostgreSQL + Redis (Docker) and the Spring
-#                                    Boot backend on :8081 (JDWP :5005 with --debug)
+#   ./dev.sh --with-backend          serve the web app through the Spring Boot platform API
+#                                    (:8081, JDWP :5005 with --debug) instead of the Python
+#                                    reference facade: starts PostgreSQL (Docker, or a local
+#                                    instance under .copilot/pg when Docker is not running),
+#                                    sandbox, agent, Spring Boot and the frontend
 #
 # Services: sandbox platform agent frontend backend
 # debugpy ports: sandbox 5678 · platform 5679 · agent 5680
@@ -43,8 +46,12 @@ done
   echo "--wait needs --debug" >&2
   exit 2
 }
-[ -n "$SERVICES" ] || SERVICES="$ALL_SERVICES"
-[ "$WITH_BACKEND" = 0 ] || SERVICES="$SERVICES backend"
+if [ -z "$SERVICES" ]; then
+  SERVICES="$ALL_SERVICES"
+  # Spring Boot replaces the Python platform facade in front of the agent service.
+  [ "$WITH_BACKEND" = 0 ] || SERVICES="sandbox agent frontend backend"
+fi
+[ "$WITH_BACKEND" = 0 ] || case " $SERVICES " in *" backend "*) ;; *) SERVICES="$SERVICES backend" ;; esac
 
 [ -x .venv/bin/python ] || {
   echo "no .venv found, run ./setup.sh first" >&2
@@ -109,23 +116,59 @@ run_agent() {
 run_frontend() {
   cd apps/frontend
   [ -d node_modules ] || npm ci --no-audit --no-fund
+  # The Vite dev server proxies /api to the platform API (8080 reference facade, 8081 Spring).
+  case " $SERVICES " in
+    *" backend "*) export VITE_API_PROXY="http://localhost:8081" ;;
+  esac
   exec npm run dev
 }
-run_backend() {
-  command -v docker >/dev/null || {
-    echo "docker is required for the backend (PostgreSQL + Redis)"
+# PostgreSQL for the Spring backend: the Compose service when Docker is running, otherwise a
+# throwaway local instance (initdb/pg_ctl from PATH or Homebrew) kept under .copilot/pg.
+start_postgres() {
+  PGUSER_="${POSTGRES_USER:-api_copilot}"
+  PGDB_="${POSTGRES_DB:-api_copilot}"
+  if command -v docker >/dev/null && docker info >/dev/null 2>&1; then
+    docker compose -f docker/docker-compose.yml up -d --wait postgres
+    export POSTGRES_HOST=localhost POSTGRES_PORT=5432
+    export POSTGRES_PASSWORD="${POSTGRES_PASSWORD:-dev-only-postgres-password}"
+    return
+  fi
+  local bin
+  for bin in "$(dirname "$(command -v initdb 2>/dev/null || true)")" /opt/homebrew/opt/postgresql@18/bin /opt/homebrew/opt/postgresql@17/bin; do
+    [ -x "$bin/initdb" ] && break
+    bin=""
+  done
+  [ -n "$bin" ] || {
+    echo "the backend needs PostgreSQL: start Docker, or install PostgreSQL (initdb/pg_ctl)" >&2
     exit 1
   }
-  docker compose -f docker/docker-compose.yml up -d --wait postgres redis
+  local dir="$ROOT/.copilot/pg" port=55432
+  [ -d "$dir/data" ] || {
+    mkdir -p "$dir"
+    "$bin/initdb" -D "$dir/data" -A trust -U "$PGUSER_" -E UTF8 >/dev/null
+  }
+  "$bin/pg_ctl" -D "$dir/data" status >/dev/null 2>&1 ||
+    "$bin/pg_ctl" -D "$dir/data" -w -l "$dir/pg.log" \
+      -o "-p $port -k $dir -c listen_addresses=127.0.0.1" start >/dev/null
+  "$bin/psql" -h 127.0.0.1 -p "$port" -U "$PGUSER_" -d postgres -tc \
+    "SELECT 1 FROM pg_database WHERE datname='$PGDB_'" | grep -q 1 ||
+    "$bin/createdb" -h 127.0.0.1 -p "$port" -U "$PGUSER_" "$PGDB_"
+  export POSTGRES_HOST=127.0.0.1 POSTGRES_PORT="$port" POSTGRES_PASSWORD=""
+}
+
+run_backend() {
+  start_postgres
   local jvm_args=""
   [ "$DEBUG" = 0 ] || jvm_args="-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=127.0.0.1:5005"
   cd apps/backend
-  # application-local.yml pins a datasource password; point it at the Compose database.
-  BACKEND_PORT=8081 \
-    SPRING_DATASOURCE_PASSWORD="${POSTGRES_PASSWORD:-dev-only-postgres-password}" \
-    REDIS_PASSWORD="${REDIS_PASSWORD:-dev-only-redis-password}" \
-    exec mvn -B spring-boot:run -Dspring-boot.run.profiles=local \
-    -Dspring-boot.run.jvmArguments="$jvm_args"
+  # Same keys as the Python services (.env): the agent verifies the platform's service tokens
+  # and approval tokens with them.
+  : "${COPILOT_PLATFORM_TOKEN_KEY:=$(head -c 48 /dev/urandom | base64 | tr -d '\n=+/')}"
+  : "${COPILOT_SERVICE_TOKEN_KEY:?COPILOT_SERVICE_TOKEN_KEY must be set in .env (shared with the agent)}"
+  : "${COPILOT_APPROVAL_KEY:?COPILOT_APPROVAL_KEY must be set in .env (shared with the agent)}"
+  export COPILOT_PLATFORM_TOKEN_KEY COPILOT_SERVICE_TOKEN_KEY COPILOT_APPROVAL_KEY
+  BACKEND_PORT=8081 COPILOT_AGENT_URL=http://127.0.0.1:8001 SPRING_PROFILES_ACTIVE=local \
+    exec mvn -B spring-boot:run -Dspring-boot.run.jvmArguments="$jvm_args"
 }
 
 cleanup() {

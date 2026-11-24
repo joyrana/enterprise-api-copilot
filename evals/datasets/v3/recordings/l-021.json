@@ -1,0 +1,17 @@
+{
+ "case": "l-021",
+ "provider": "mlx",
+ "model": "mlx-community/Qwen3-4B-Instruct-2507-4bit",
+ "recorded_at": "2026-11-24T11:03:52.980278+00:00",
+ "prompt_versions": [
+  "intent=intent-v4",
+  "plan=planner-v5"
+ ],
+ "latency_ms": 15371.7,
+ "outputs": [
+  "{\n  \"intent\": \"api_execution\",\n  \"confidence\": 0.99,\n  \"rationale\": \"The request specifies a concrete customer ID and amount to create a payment, indicating a direct action to be performed.\",\n  \"entities\": {\n    \"payment_id\": null,\n    \"customer_id\": \"cust_acm0001\",\n    \"order_id\": null,\n    \"amount_minor\": 50000,\n    \"currency\": \"₹500\",\n    \"status_codes\": [],\n    \"languages\": [],\n    \"status_filter\": null,\n    \"refund_reason\": null,\n    \"operation_hint\": \"create a sandbox payment\"\n  }\n}",
+  "{\"thought\": \"Find the payment creation operation\", \"action\": \"call\", \"skill_id\": \"api.search\", \"arguments\": {\"query\": \"create payment\", \"limit\": 5}}",
+  "{\"thought\": \"Find the operation to create a payment.\", \"action\": \"call\", \"skill_id\": \"api.describe\", \"arguments\": {\"operation_id\": \"createPayment\"}}",
+  "{\"thought\": \"Prepare to create a payment with specified amount and customer ID.\", \"action\": \"call\", \"skill_id\": \"api.call.write\", \"arguments\": {\"operation_id\": \"createPayment\", \"path_params\": {}, \"query\": {}, \"body\": {\"amount\": 50000, \"currency\": \"INR\", \"customer_id\": \"cust_acm0001\", \"description\": \"Sandbox payment for testing\"}}}"
+ ]
+}

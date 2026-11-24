@@ -134,3 +134,20 @@ async def test_jwt_clock_injection_for_not_yet_valid() -> None:
         skill.input_model(token=_token(nbf=NOW + 600, exp=NOW + 4000, iat=NOW)), h.ctx()
     )
     assert out.not_yet_valid and out.expired is False and out.lifetime_s == 4000
+
+
+async def test_jwt_with_a_corrupted_signature_is_still_inspected() -> None:
+    """PyJWT refuses a non-base64url signature segment even unverified; inspection must not."""
+    h = build_harness()
+    header, claims, _ = _token(exp=int(time.time()) + 600, scope="orders:read").split(".")
+    result = await h.services.runtime.invoke(
+        "token.inspect", {"token": f"{header}.{claims}.evalsignature0"}, h.ctx()
+    )
+    assert result.ok and result.output is not None
+    assert result.output["scopes"] == ["orders:read"]
+    assert result.output["issues"][0].startswith("signature segment is not valid base64url")
+    assert "evalsignature0" not in json.dumps(result.output)
+    garbage = await h.services.runtime.invoke(
+        "token.inspect", {"token": "eyJhbGciOiJIUzI1NiJ9.bm90LWpzb24.x"}, h.ctx()
+    )
+    assert not garbage.ok and garbage.error and garbage.error.code is SkillErrorCode.INVALID_INPUT

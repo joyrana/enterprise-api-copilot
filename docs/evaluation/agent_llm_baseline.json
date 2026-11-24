@@ -1,0 +1,78 @@
+{
+  "intent_accuracy": {
+    "mean": 0.9444,
+    "ci95": [
+      0.8611,
+      1.0
+    ],
+    "n": 36
+  },
+  "status_accuracy": {
+    "mean": 1.0,
+    "ci95": [
+      1.0,
+      1.0
+    ],
+    "n": 36
+  },
+  "argument_exact_match": {
+    "mean": 1.0,
+    "ci95": [
+      1.0,
+      1.0
+    ],
+    "n": 15
+  },
+  "skill_prf": {
+    "precision": 0.8676,
+    "recall": 0.9672,
+    "f1": 0.9147
+  },
+  "model_calls_per_run": {
+    "mean": 4.75,
+    "ci95": [
+      4.1944,
+      5.3056
+    ],
+    "n": 36
+  },
+  "latency_ms": {
+    "p50": 16863.6,
+    "p95": 31281.0,
+    "n": 36
+  },
+  "rejected_decision_rate": 0.2198,
+  "repair_rate": {
+    "mean": 0.0,
+    "ci95": [
+      0.0,
+      0.0
+    ],
+    "n": 36
+  },
+  "task_success": {
+    "mean": 0.8056,
+    "ci95": [
+      0.6667,
+      0.9167
+    ],
+    "n": 36
+  },
+  "meta": {
+    "mode": "replay",
+    "model": "mlx-community/Qwen3-4B-Instruct-2507-4bit",
+    "prompt_versions": {
+      "intent": [
+        "intent-v4"
+      ],
+      "plan": [
+        "planner-v5"
+      ],
+      "respond": [
+        "responder-v3"
+      ]
+    },
+    "dataset_sha256": "4962dfea5a94ba495ba4929aeb38ba8c5ed375eb6ca21d75fc962d9c948bca60",
+    "cases": 36
+  }
+}

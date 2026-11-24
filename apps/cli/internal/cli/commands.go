@@ -191,12 +191,17 @@ func (a *app) showRun(run client.Run, withTimeline bool) (int, error) {
 		return code, output.WriteJSON(a.io.Out, run)
 	}
 	a.printf("[%s] %s  (%s, %d tool calls)\n\n%s\n", run.Status, run.RunID, run.Environment, run.ToolCalls, run.Message)
-	if p := run.PendingApproval; p != nil {
-		a.printf("\nPending action (%s in %s):\n  %s\n  action hash: %s\n", p.SkillID, p.Environment, p.Summary, p.ActionHash)
-		a.printf("An approver can run:  copilot runs approve %s\n", run.RunID)
-	}
-	if len(run.MissingFields) > 0 {
-		a.printf("\nMissing: %s — ask again with these details.\n", strings.Join(run.MissingFields, ", "))
+	if len(run.UI) > 0 {
+		a.renderComponents(run)
+	} else {
+		// Older servers send no components: keep the plain panels.
+		if p := run.PendingApproval; p != nil {
+			a.printf("\nPending action (%s in %s):\n  %s\n  action hash: %s\n", p.SkillID, p.Environment, p.Summary, p.ActionHash)
+			a.printf("An approver can run:  copilot runs approve %s\n", run.RunID)
+		}
+		if len(run.MissingFields) > 0 {
+			a.printf("\nMissing: %s — answer with: copilot runs clarify %s \"...\"\n", strings.Join(run.MissingFields, ", "), run.RunID)
+		}
 	}
 	if len(run.Evidence) > 0 {
 		a.printf("\nEvidence: %s\n", strings.Join(run.Evidence, ", "))

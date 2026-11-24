@@ -20,6 +20,8 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
+
 from ai.agent.contracts import RunState, RunStatus, UIComponent
 
 MAX_COMPONENTS = 5
@@ -28,12 +30,146 @@ _MAX_BODY_CHARS = 6000
 Props = dict[str, Any]
 
 
+class _Props(BaseModel):
+    """Base of every component's props schema: unknown keys are a bug, not a feature."""
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class OperationSummary(_Props):
+    operation_id: str | None = None
+    api: str | None = None
+    method: str | None = None
+    path: str | None = None
+    summary: str | None = None
+    scopes: list[str] = Field(default_factory=list)
+    invocation_skill: str | None = None
+
+
+class OperationListProps(_Props):
+    operations: list[OperationSummary]
+
+
+class ParameterRow(_Props):
+    name: str
+    location: str
+    required: bool
+    description: str = ""
+
+
+class BodyField(_Props):
+    name: str
+    type: str | None = None
+    required: bool
+    description: str = ""
+    enum: list[Any] | None = None
+
+
+class OperationDetailProps(_Props):
+    operation_id: str
+    api_title: str | None = None
+    api_version: str | None = None
+    method: str | None = None
+    path: str | None = None
+    summary: str | None = None
+    description: str | None = None
+    authentication: str | None = None
+    scopes: list[str] = Field(default_factory=list)
+    side_effect: str | None = None
+    deprecated: bool = False
+    parameters: list[ParameterRow] = Field(default_factory=list)
+    body_required: bool = False
+    body_fields: list[BodyField] = Field(default_factory=list)
+    responses: dict[str, str] = Field(default_factory=dict)
+
+
+class CodeSnippetsProps(_Props):
+    operation_id: str
+    snippets: dict[str, str] = Field(default_factory=dict)
+    notes: list[str] = Field(default_factory=list)
+
+
+class ApiResponseProps(_Props):
+    operation_id: str | None = None
+    method: str | None = None
+    path: str | None = None
+    status_code: int | None = None
+    ok: bool | None = None
+    correlation_id: str | None = None
+    retry_after_s: float | None = None
+    response_body: Any = None
+    response_preview: str | None = None
+    curl: str | None = None
+
+
+class DocSource(_Props):
+    source_id: str | None = None
+    title: str | None = None
+    section: str | None = None
+    uri: str | None = None
+    flagged: bool | None = None
+
+
+class DocSourcesProps(_Props):
+    extract: str = ""
+    abstained: bool = False
+    citations: list[dict[str, Any]] = Field(default_factory=list)
+    sources: list[DocSource] = Field(default_factory=list)
+
+
+class JwtReportProps(_Props):
+    algorithm: str | None = None
+    key_id: str | None = None
+    kind: str | None = None
+    scopes: list[str] = Field(default_factory=list)
+    missing_scopes: list[str] = Field(default_factory=list)
+    expires_at: str | None = None
+    issued_at: str | None = None
+    expired: bool | None = None
+    lifetime_s: float | None = None
+    claims: dict[str, Any] = Field(default_factory=dict)
+    issues: list[str] = Field(default_factory=list)
+    verified: bool = False
+    note: str | None = None
+
+
+class TraceStep(_Props):
+    step_id: str
+    skill_id: str
+    purpose: str = ""
+    ok: bool | None = None
+    duration_ms: float | None = None
+
+
+class RunTraceProps(_Props):
+    steps: list[TraceStep]
+    mode: str
+
+
+class ApprovalRequestProps(_Props):
+    summary: str
+    action_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+    skill_id: str
+    environment: str
+    arguments: dict[str, Any]
+
+
+class ClarificationProps(_Props):
+    question: str
+    missing_fields: list[str] = Field(default_factory=list)
+
+
+class NoProps(_Props):
+    """Components whose content comes from the run itself, not from a step."""
+
+
 @dataclass(frozen=True)
 class ComponentSpec:
     name: str
     description: str
     sources: frozenset[str]  # skill ids whose output the component renders
     build: Callable[[dict[str, Any]], Props]
+    props_model: type[BaseModel]  # the props schema; manifest + server-side validation
     selectable: bool = True  # False: server-controlled (approval, clarification)
 
 
@@ -160,48 +296,56 @@ REGISTRY: dict[str, ComponentSpec] = {
             "Table of API operations found by a search (method, path, summary, scopes).",
             frozenset({"api.search"}),
             _operation_list,
+            OperationListProps,
         ),
         ComponentSpec(
             "operation_detail",
             "Full contract of one operation: auth, scopes, parameters, body fields, responses.",
             frozenset({"api.describe"}),
             _operation_detail,
+            OperationDetailProps,
         ),
         ComponentSpec(
             "code_snippets",
             "Tabbed code samples (cURL, Python, JavaScript, Java) for an operation.",
             frozenset({"code.generate"}),
             _code_snippets,
+            CodeSnippetsProps,
         ),
         ComponentSpec(
             "api_response",
             "Result of an executed API call: HTTP status, response JSON, correlation id, cURL.",
             frozenset({"api.call.read", "api.call.write", "api.call.delete"}),
             _api_response,
+            ApiResponseProps,
         ),
         ComponentSpec(
             "doc_sources",
             "Documentation passages and citations that back the answer.",
             frozenset({"docs.search"}),
             _doc_answer,
+            DocSourcesProps,
         ),
         ComponentSpec(
             "jwt_report",
             "Decoded JWT: algorithm, expiry, scopes, masked claims and detected problems.",
             frozenset({"token.inspect"}),
             _jwt_report,
+            JwtReportProps,
         ),
         ComponentSpec(
             "run_trace",
             "Timeline of the skills the agent called to produce this answer.",
             frozenset(),
             lambda _out: {},
+            RunTraceProps,
         ),
         ComponentSpec(
             "approval_request",
             "Approve or reject a pending side-effecting action (server-controlled).",
             frozenset(),
             lambda _out: {},
+            ApprovalRequestProps,
             selectable=False,
         ),
         ComponentSpec(
@@ -209,10 +353,35 @@ REGISTRY: dict[str, ComponentSpec] = {
             "Ask the user for missing required values (server-controlled).",
             frozenset(),
             lambda _out: {},
+            ClarificationProps,
             selectable=False,
         ),
     )
 }
+
+
+def manifest() -> dict[str, Any]:
+    """The component contract shared with the OpenAPI enum and the web registry (G12)."""
+    return {
+        "version": 1,
+        "description": "Generated from ai/agent/ui.py (python -m ai.agent.ui --write). "
+        "Do not edit by hand.",
+        "components": [
+            {
+                "name": spec.name,
+                "description": spec.description,
+                "selectable": spec.selectable,
+                "sources": sorted(spec.sources),
+                "props_schema": spec.props_model.model_json_schema(),
+            }
+            for spec in REGISTRY.values()
+        ],
+    }
+
+
+def validate_props(name: str, props: Props) -> Props:
+    """Props as the component's schema defines them; raises ``ValidationError`` otherwise."""
+    return REGISTRY[name].props_model.model_validate(props).model_dump(mode="json")
 
 
 def selectable_components() -> list[ComponentSpec]:
@@ -260,68 +429,97 @@ def build_components(
         for step_id, result in state.results.items()
         if result.ok and result.output is not None
     }
-    if choices is None:
-        choices = []
-        for step_id, result in ok_steps.items():
-            spec = next(
-                (s for s in REGISTRY.values() if result.skill_id in s.sources and s.selectable),
-                None,
-            )
-            if spec is not None:
-                choices.append((spec.name, step_id))
-    out: list[UIComponent] = []
-    rejected: list[str] = []
-    seen: set[tuple[str, str]] = set()
-    for name, source in choices:
-        spec = REGISTRY.get(name)
-        if spec is None or not spec.selectable:
-            rejected.append(f"{name}: not a selectable component")
-            continue
-        if spec.sources:
-            chosen = ok_steps.get(source)
-            if chosen is None or chosen.skill_id not in spec.sources:
-                # Small models often name the wrong source (e.g. a citation marker). When
-                # exactly one successful step fits the component, that step is meant.
-                fitting = [k for k, r in ok_steps.items() if r.skill_id in spec.sources]
-                if len(fitting) != 1:
+    defaults: list[tuple[str, str]] = []
+    for step_id, result in ok_steps.items():
+        spec = next(
+            (s for s in REGISTRY.values() if result.skill_id in s.sources and s.selectable),
+            None,
+        )
+        if spec is not None:
+            defaults.append((spec.name, step_id))
+
+    def resolve_source(spec: ComponentSpec, source: str) -> str | None:
+        chosen = ok_steps.get(source)
+        if chosen is not None and chosen.skill_id in spec.sources:
+            return source
+        fitting = [k for k, r in ok_steps.items() if r.skill_id in spec.sources]
+        # Small models often name the wrong source: a citation marker ("1") or the
+        # operation id ("refundPayment") instead of the step id.
+        by_operation = [
+            k for k in fitting if (ok_steps[k].output or {}).get("operation_id") == source
+        ]
+        if len(by_operation) == 1:
+            return by_operation[0]
+        if len(fitting) == 1:
+            return fitting[0]
+        return None
+
+    def select(wanted: list[tuple[str, str]]) -> tuple[list[UIComponent], list[str]]:
+        out: list[UIComponent] = []
+        rejected: list[str] = []
+        seen: set[tuple[str, str]] = set()
+        for name, source in wanted:
+            spec = REGISTRY.get(name)
+            if spec is None or not spec.selectable:
+                rejected.append(f"{name}: not a selectable component")
+                continue
+            if spec.sources:
+                resolved = resolve_source(spec, source)
+                if resolved is None:
                     rejected.append(
                         f"{name}: '{source}' is not a successful {'/'.join(spec.sources)} step"
                     )
                     continue
-                source, chosen = fitting[0], ok_steps[fitting[0]]
-            if (name, source) in seen:
-                continue
-            props = spec.build(chosen.output or {})
-        else:
-            if (name, "") in seen or (
-                name == "run_trace" and not (state.plan and state.plan.steps)
-            ):
-                continue
-            props = _trace_props(state)
-        seen.add((name, source if spec.sources else ""))
-        out.append(
-            UIComponent(
-                id=f"ui{len(out) + 1}",
-                component=name,
-                source=source if spec.sources else None,
-                props=props,
+                source = resolved
+                if (name, source) in seen:
+                    continue
+                try:
+                    props = validate_props(name, spec.build(ok_steps[source].output or {}))
+                except ValidationError:
+                    rejected.append(f"{name}: props built from '{source}' do not match its schema")
+                    continue
+            else:
+                if (name, "") in seen or (
+                    name == "run_trace" and not (state.plan and state.plan.steps)
+                ):
+                    continue
+                props = validate_props(name, _trace_props(state))
+            seen.add((name, source if spec.sources else ""))
+            out.append(
+                UIComponent(
+                    id=f"ui{len(out) + 1}",
+                    component=name,
+                    source=source if spec.sources else None,
+                    props=props,
+                )
             )
-        )
-        if len(out) >= MAX_COMPONENTS:
-            break
+            if len(out) >= MAX_COMPONENTS:
+                break
+        return out, rejected
+
+    out, rejected = select(defaults if choices is None else choices)
+    if choices is not None and defaults and not any(c.source for c in out):
+        # Every model choice was invalid (or it chose none) although real data exists:
+        # show that data rather than an empty panel. Props are still server-built.
+        fallback, _ = select(defaults)
+        out = fallback + out
+        rejected.append("no valid data component chosen; showing the default layout")
     if state.status is RunStatus.AWAITING_APPROVAL and state.pending_approval is not None:
         out.append(
             UIComponent(
                 id="approval",
                 component="approval_request",
                 source=state.pending_approval.step_id,
-                props={
-                    "summary": state.pending_approval.summary,
-                    "action_hash": state.pending_approval.action_hash,
-                    "skill_id": state.pending_approval.skill_id,
-                    "environment": state.pending_approval.environment,
-                    "arguments": state.pending_approval.arguments,
-                },
+                props=validate_props(
+                    "approval_request",
+                    {
+                        "summary": state.pending_approval.summary,
+                        "action_hash": state.pending_approval.action_hash,
+                        "skill_id": state.pending_approval.skill_id,
+                        "environment": state.pending_approval.environment,
+                        "arguments": state.pending_approval.arguments,
+                    },
+                ),
             )
         )
     if state.status is RunStatus.NEEDS_CLARIFICATION:
@@ -329,10 +527,35 @@ def build_components(
             UIComponent(
                 id="clarification",
                 component="clarification",
-                props={
-                    "question": state.message,
-                    "missing_fields": state.missing_fields,
-                },
+                props=validate_props(
+                    "clarification",
+                    {"question": state.message, "missing_fields": state.missing_fields},
+                ),
             )
         )
     return out, rejected
+
+
+def main(argv: list[str] | None = None) -> int:
+    """``python -m ai.agent.ui --write`` regenerates the manifest; without it, checks it."""
+    import argparse
+    from pathlib import Path
+
+    target = (
+        Path(__file__).resolve().parents[2] / "contracts" / "json-schema" / "ui-components.json"
+    )
+    parser = argparse.ArgumentParser(prog="python -m ai.agent.ui")
+    parser.add_argument("--write", action="store_true")
+    text = json.dumps(manifest(), indent=2, sort_keys=True) + "\n"
+    if parser.parse_args(argv).write:
+        target.write_text(text, encoding="utf-8")
+        print(f"wrote {target}")
+        return 0
+    if not target.exists() or target.read_text(encoding="utf-8") != text:
+        print(f"{target} is out of date: run python -m ai.agent.ui --write")
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

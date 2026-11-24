@@ -59,6 +59,11 @@ jobs:
         run: pytest -m "not live"
       - name: Smoke evaluation (safety gates are hard failures)
         run: python -m evals run --suite smoke --out evals/reports/smoke
+      - name: LLM agent evaluation (replay of recorded model outputs; safety gate)
+        run: >-
+          python -m evals agent-llm --replay
+          --baseline docs/evaluation/agent_llm_baseline.json
+          --out evals/reports/agent-llm-replay
       - name: Retrieval ablation (held-out split) and judge harness
         run: |
           python -m evals.ablation --split test --out evals/reports/ablation-test

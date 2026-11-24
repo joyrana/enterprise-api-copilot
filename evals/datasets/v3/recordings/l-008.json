@@ -1,0 +1,20 @@
+{
+ "case": "l-008",
+ "provider": "mlx",
+ "model": "mlx-community/Qwen3-4B-Instruct-2507-4bit",
+ "recorded_at": "2026-11-24T10:59:44.822183+00:00",
+ "prompt_versions": [
+  "intent=intent-v4",
+  "plan=planner-v5",
+  "respond=responder-v3"
+ ],
+ "latency_ms": 18553.0,
+ "outputs": [
+  "{\n  \"intent\": \"code_generation\",\n  \"confidence\": 1,\n  \"rationale\": \"The request asks for a Python example to list orders, indicating a code sample is needed.\",\n  \"entities\": {\n    \"payment_id\": null,\n    \"customer_id\": null,\n    \"order_id\": null,\n    \"amount_minor\": null,\n    \"currency\": null,\n    \"status_codes\": [],\n    \"languages\": [\n      \"python\"\n    ],\n    \"status_filter\": null,\n    \"refund_reason\": null,\n    \"operation_hint\": \"list orders\"\n  }\n}",
+  "{\"thought\": \"Find the operation to list orders\", \"action\": \"call\", \"skill_id\": \"api.search\", \"arguments\": {\"query\": \"list orders\"}}",
+  "{\"thought\": \"Find Python code example for listing orders\", \"action\": \"call\", \"skill_id\": \"code.generate\", \"arguments\": {\"operation_id\": \"listOrders\", \"languages\": [\"python\"]}}",
+  "{\"thought\": \"Generate Python code to list orders\", \"action\": \"call\", \"skill_id\": \"code.generate\", \"arguments\": {\"operation_id\": \"listOrders\", \"languages\": [\"python\"]}}",
+  "{\"thought\": \"Python example for listing orders is already generated.\", \"action\": \"finish\"}",
+  "{\"message\":\"Python example to list orders using the `listOrders` API operation.\\n\\n```python\\nimport os\\nimport httpx\\n\\n# Set COPILOT_TOKEN to an OAuth access token with scope: orders:read\\n# Example: COPILOT_TOKEN=your_access_token\\n\\nheaders = {\\n    \\\"Authorization\\\": f\\\"Bearer {os.environ['COPILOT_TOKEN']}\\\",\\n    \\\"Accept\\\": \\\"application/json\\\"\\n}\\n\\nresponse = httpx.get(\\n    \\\"http://sandbox.local/v2/orders\\\",\\n    headers=headers,\\n    timeout=30,\\n)\\n\\nprint(response.status_code, response.text)\\n```\\n\\n> **Note**: The access token must have the `orders:read` scope. The response will contain a list of orders if available.\", \"components\":[{\"component\":\"code_snippets\",\"source\":\"codegen\"}]}"
+ ]
+}

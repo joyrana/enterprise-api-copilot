@@ -1,24 +1,102 @@
 # Implementation Status
 
-- **Last updated:** 2026-10-04 (session 3)
-- **Base commit:** `2e5ef5b`. All work from sessions 1–3 is on branch `feat/agentic-platform-foundation` with a pull request against `main`.
-- **Plan:** [`MASTER_PLAN.md`](MASTER_PLAN.md) · **Baseline audit:** [`AUDIT.md`](AUDIT.md)
+- **Last updated:** 2026-11-24 (session 4: LLM-agent production gaps G1–G15)
+- **Plan:** [`MASTER_PLAN.md`](MASTER_PLAN.md) · **Baseline audit:** [`AUDIT.md`](AUDIT.md) · **Decisions:** ADR-0011 (LLM-driven agent), ADR-0012 (Spring platform)
 
-## External blocker (read first)
+## Environment
 
-The environment's egress policy blocks **PyPI, npm, Maven Central and the Go module proxy**
-(re-checked 2026-10-04: still 403). Consequences:
+Session 4 had working PyPI, npm and Maven Central access, Java 21, Go, PostgreSQL 18 (local, no
+Docker daemon) and an Apple-Silicon mlx-lm server with `Qwen3-4B-Instruct-2507-4bit`, so the
+earlier "registry blocked" caveats below apply to sessions 1–3 only. Still **not** done: no
+GitHub Actions run (so the new workflows are unexecuted), no Docker image builds, no real OIDC
+identity provider, no PostgreSQL run of the agent's `SqlRuntimeStore` tests
+(`COPILOT_TEST_PGURL` unset; the new conversation tables' PostgreSQL twin is therefore
+syntax-reviewed only).
 
-- Spring Boot backend **not built or tested**; LangGraph, FastAPI, psycopg **not installed**.
-- No `uv.lock` / `package-lock.json` / Maven wrapper. (The Go CLI no longer needs a `go.sum`.)
-- The React app's full npm build, Vitest and ESLint have **not run**.
+## PR review (session 5)
 
-Work was therefore limited to what could be verified with local tooling: Python 3.13 with
-pydantic/starlette/uvicorn/httpx/mcp 2.2/numpy/jsonschema/PyJWT, pytest, ruff, mypy, Go 1.24,
-Node 22 + global TypeScript 6.0 and Prettier, `javac`, PostgreSQL 16 + pgvector 0.8.7 (built from source).
+The three stacked PRs were reviewed and run end to end locally (Python facade and Spring
+jar contract suites, PostgreSQL 18 integration tests, Go CLI system tests, Vitest + Node
+tests, the live stack against mlx-lm, and a live `agent_llm` re-record). Findings, all fixed:
 
-**To unblock:** allow `pypi.org`, `files.pythonhosted.org`, `registry.npmjs.org`,
-`repo.maven.apache.org` (and `proxy.golang.org`, `sum.golang.org` for `govulncheck`).
+| # | Severity | Finding | Fix | Evidence |
+|---|---|---|---|---|
+| R1 | **Security** | A viewer could answer another user's clarification with their own values; the run kept the requester's permissions and paused for approval of that amount (confused deputy). Colleagues could read and post into another user's conversation | `clarify` is requester-only (403); conversations are private to their creator (404) | Reproduced through the API before the fix; contract `test_conversations_and_clarification` on both implementations; History only offers the answer box to the requester |
+| R2 | High | The approval summary showed the path template (`/v1/payments/{payment_id}/refunds`), so an approver could not see *which* payment | Summary shows the concrete path and query | `test_undescribed_calls_…` |
+| R3 | High | The run time budget used the wall clock: a sleep/wake or NTP step failed healthy runs with "run deadline exceeded" (found when a live eval ran across a sleep: 6 runs failed after 8–39 s) | Budget measured on a monotonic clock per segment | `test_a_wall_clock_jump_does_not_exhaust_the_run_budget` |
+| R4 | High | The reply could state identifiers no step produced (`pay_12345`, an invented request example) | Reply identifiers/operation names must appear in the run's evidence: one corrective retry, then `[unverified]` | `test_invented_identifiers_in_the_reply_are_retried_then_masked` |
+| R5 | Medium | `npm run test:node` (a CI job) failed: `client.ts` imported `./sse` without an extension | `./sse.ts` | `node --test` 4/4 |
+| R6 | Medium | The 4B model proposed calls before describing them; rejections withdrew the skill and multi-step tasks (G3) dead-ended | Orchestrator runs the needed `api.describe` (read-only), then validates the call | live: "Refund the latest captured payment for ₹100" now pauses for approval naming the id and its provenance |
+| R7 | Medium | Invalid component choices (source named by operation id) left the reply with no components | Map operation id → step; fall back to the default layout of real data | `test_invalid_component_choices_fall_back_to_real_data` |
+| R8 | Medium | `token.inspect` rejected a token whose signature segment was corrupt (PyJWT refuses it even unverified), and the planner retried the identical failing call four times | Header/claims still decoded with the corruption reported; identical failed calls are refused | `test_jwt_with_a_corrupted_signature_is_still_inspected`, `test_an_identical_call_that_already_failed_is_not_retried` |
+| R9 | Low | Unusable planner output after real progress failed the whole run | Planning stops and the model answers from what it has (`plan_unusable`); before any progress, and for an unreachable model, the run still fails | two `test_unusable_planner_output_…` tests |
+| R11 | High | Live: after an approved refund executed (HTTP 200), the run ended FAILED "tool-call budget exhausted", which hides the write and invites a duplicate retry; an approved step could also be refused because its paused attempt had already used the last tool call. The orchestrator's own describes also used up the model's step budget | Budgets reached after progress end planning and answer (`budget_reached`); an approved step runs; orchestrator steps count only against the tool-call budget | `test_a_write_that_uses_the_last_tool_call_still_completes`, `test_orchestrator_describes_do_not_use_the_models_step_budget`; live: refund → approval → HTTP 201 → COMPLETED |
+| R10 | Low | "Get payment <id>" flipped between execution and discovery on the 4B model | `intent-v4`: id-bearing get/show/fetch is execution (examples do not reuse eval wording) | live intent accuracy 0.917 → 0.944 |
+
+Live end to end on the local stack (platform → agent → mlx-lm): 15/16 checks then G3 after
+R11 — "Refund the latest captured payment for ₹100" paused with the concrete target and the id's
+provenance, was approved by an approver and created the refund (HTTP 201, COMPLETED). Viewer
+clarify → 403, colleague's conversation → 404, self-approval → 403, replay → 409, three
+concurrent runs completed. A run that spanned a 30-minute laptop sleep completed with
+`elapsed_s` 15 s (R3 working).
+
+Live `agent_llm` after the fixes ([report](../evaluation/agent_llm_review_live_report.md)):
+status and argument accuracy 1.0, intent 0.944, skill F1 0.915, model calls/run 5.14 → 4.75,
+repair rate 0.028 → 0, p95 31.5 s, safety violations 0; the replay baseline was rewritten from
+these recordings. **Open:** on `adv-008` ("every payment for the globex tenant") the 4B model
+still words the caller's own payments as globex's despite the responder rule (no data
+crosses tenants). pgvector is not installed locally, so its 4 SQL tests were not run.
+
+## LLM-agent gaps (session 4)
+
+Branches: the work landed on `feat/agent-p0-security-correctness` (Phase 0),
+`feat/agent-p1-conversations` (Phase 1) and `feat/agent-p2-p5-observability-capacity-ui`
+(Phases 2–7; mixed in two commits because the changes share files). Nothing is pushed or merged.
+
+| Gap | Status | Evidence | Not done / caveat |
+|---|---|---|---|
+| G8 secrets to the model | **Done** | `sanitize_request` in `generate_structured` (every stage, every retry); `tests/unit/test_llm_secrets.py`; eval cases `adv-004` | Pattern-based; unknown credential shapes can pass |
+| G9 failure after a write | **Done** | `summary_unavailable`, COMPLETED vs FAILED tests (responder and planner) | — |
+| ADR-0011 | **Done** | `docs/adr/ADR-0011.md` | — |
+| G1 conversation memory | **Done** | SQL-backed (`V002`), tenant-scoped; scripted tests incl. "curl for it" and ₹200→₹150; **live**: "show me the curl for it" → `refundPayment`, and eval case `l-028` (₹150, payment id from the earlier turn) passes on the real model | — (the PostgreSQL twin of V002 is executed by `test_conversation_statements_are_tenant_scoped`) |
+| G2 resumable clarification | **Done** | `POST /runs/{id}/clarify` + plain next message routed; live: "Create a payment for cust_acm0001" → "₹500" → approval → HTTP 201, no model call to resume | The intent-level "too vague" clarification is not resumable (a new message in the conversation covers it) |
+| G3 grounding from API results | **Done** | provenance in the event and approval summary; docs/failed calls never sources (`test_conversations`); the orchestrator now runs the `api.describe` a proposed call needs instead of rejecting it, which is what stopped the 4B model; `test_llm_agent::test_undescribed_calls_are_described_first_and_ids_come_from_results` | Live result in the review section below |
+| G7 model observability | **Done** | `llm.generate` spans, `model_call` events with prompt versions, opt-in payload capture; `test_llm_tracing.py` | — |
+| G5 LLM evaluation | **Done** | `python -m evals agent-llm`, 36 cases / 8 adversarial, recordings + baselines in `docs/evaluation/` | Replay measures the code around the model, not the model; the committed live report predates one case's re-record (`l-027`) |
+| G15 CI with a real model | **Written, never run** | `.github/workflows/evals-live.yml` (macOS arm64, nightly + dispatch), replay step in `python-ci.yml` | Needs a push to verify; the `mlx-lm==0.29.1` pin and runner label are untested |
+| G4 async, SSE, concurrency | **Done** | 202 + SSE (resumable), tenant-fair limiter, 429 + `Retry-After`, queue wait recorded and excluded from the budget; **live** through the Vite proxy: two concurrent runs both completed, one with 6.5 s queue wait | The React live-steps view is covered by unit tests only (no browser session). Found and fixed by the live run: the stream closed when the status turned COMPLETED, before the reply existed; `RunState.settled` now gates it (regression test with a held-back responder) |
+| G6 fewer wasted calls | **Done, measured** | probe for `response_format`, robust JSON extraction, skill withdrawal after two rejections, hints: model calls/run 5.61 → 5.14, rejected-decision rate 0.29 → 0.20, skill F1 0.88 → 0.93, intent accuracy unchanged | mlx-lm 0.29.1 does not honour `response_format` (probe says so), so no constrained decoding |
+| G10 skills declare intents | **Done** | resolver built from the registry; legacy table frozen as an oracle in `test_resolver.py`; start-up validation | Skill order in prompts is now `SkillDefinition.order`, not per-intent |
+| G12 one component registry | **Done** | `contracts/json-schema/ui-components.json`, server-side props validation; Python and Vitest drift tests | — |
+| G11 every client renders UI | **Done** | History page renders `GenUI` (approve only for approvers on pending runs); Go CLI renders every component, `--json`; system test covers discovery, write + approval, clarification resume | — |
+| G14 Spring Boot platform | **Done** | `mvn verify` green (Spotless, Checkstyle, 27 tests, JaCoCo ≥ 80 %); `tests/contract` passes against the Python facade **and** the Spring jar with PostgreSQL | Spring Boot 3.5 (not 4.x); OIDC unverified. Verified on the full live stack (`./dev.sh --with-backend`: mlx-lm, sandbox, agent, Spring, local PostgreSQL, Vite): async runs + SSE through the proxy, conversation, clarification, approval 403 for a developer / 200 for an approver, a payment created in the sandbox, approval decisions and audit rows in PostgreSQL, and the Go CLI rendering components against it |
+| G13 documentation | **Done** | principles, overview, threat model (T22–T29), runbook, README, ADR-0011/0012, this file | — |
+
+### Measured on the real model (36 cases, Qwen3 4B, mlx-lm 0.29.1)
+
+| | Phase 2 baseline | After G6 |
+|---|---|---|
+| Intent accuracy | 0.917 | 0.917 |
+| Skill precision / recall / F1 | 0.83 / 0.93 / 0.88 | 0.93 / 0.93 / 0.93 |
+| Argument exact match | 1.0 (n = 13) | 1.0 (n = 13) |
+| Model calls per run | 5.61 | 5.14 |
+| Rejected-decision rate | 0.29 | 0.20 |
+| Latency p50 / p95 | 16.6 s / 36.5 s | 16.9 s / 37.4 s |
+| Safety violations | 0 | 0 |
+
+Latency is wall clock on one machine while other work ran; treat differences under ~10 % as noise.
+The prompts changed between the columns, so the second column's recordings are the committed ones.
+
+### Decisions that differ from, or add to, the prompt
+
+- One intermediate bug found by running live and fixed: the event stream closed when the status
+  turned COMPLETED, before the reply and UI existed; runs now end with a `settled` event and the
+  stream waits for it. A second: `input_tokens`/`output_tokens` in `model_call` events were being
+  redacted as credentials; they are `usage_in`/`usage_out` now.
+- Intent entities from the model now read `"null"`/`null` for empty lists as empty (a live
+  multi-turn case failed twice on this); values are still grounded afterwards.
+- The Spring backend drops Redis, JPA, Spring AI and the unused scaffold schema (never deployed).
+- Skills carry an `order` next to `intents` so the planner sees them in a stable, sensible order.
 
 ## Phase status
 
@@ -27,12 +105,12 @@ Node 22 + global TypeScript 6.0 and Prettier, `javac`, PostgreSQL 16 + pgvector 
 | 0 Audit & baseline | **Done** | `AUDIT.md`, ADR-0005…0009, architecture docs, threat model v2 |
 | 1 Foundation | **Partial** | Python + Go consolidated with CI; Java text fixes applied but unbuilt |
 | 2 Data & contracts | **Done** | Skill contracts; knowledge SQL (verified on pgvector); `platform-api.yaml` + `agent-service.yaml` with full-coverage contract tests |
-| 3 Platform backend | **Blocked** | Maven Central; local reference implementation of its contract serves clients meanwhile (ADR-0009) |
-| 4 AI backend | **Partial** | Core + internal HTTP API + service-token auth verified; LangGraph/Postgres checkpointer blocked |
+| 3 Platform backend | **Done (session 4)** | Spring Boot implementation of `platform-api.yaml` (ADR-0012); contract suite passes on it and on the Python facade |
+| 4 AI backend | **Partial** | LLM-driven core + internal HTTP API (runs, SSE, conversations, catalog) + service-token auth verified; LangGraph/Postgres checkpointer not built |
 | 5 Skill runtime & sandbox | **Done** | §11 workflow verified in-process, over HTTP, and through the CLI |
 | 6 Knowledge & RAG | **Partial** | In-process + SQL hybrid verified; LSA + stemming adopted from held-out ablation; psycopg adapter and pretrained embedder blocked |
 | 7 Evaluation | **Mostly done** | Offline suites, corpus v2 with dev/test split, paired ablations, judge harness, load test; live judge run pending |
-| 8 CLI & frontend | **Partial** | CLI done; web chat + history wired to the real API (client tested); npm build pending |
+| 8 CLI & frontend | **Done (session 4)** | CLI renders UI components; web chat streams progress, History renders GenUI; lint, type-check, 18 Vitest tests, build pass |
 | 9 Reliability/security/observability | **Mostly done** | Durable single-use approvals, W3C trace propagation + JSON spans, fault injection, runbook; OTel SDK export/dashboards blocked |
 | 10 Release readiness | **Partial** | Load tests, release checklist; container builds unverified (no Docker daemon) |
 
@@ -67,20 +145,20 @@ Node 22 + global TypeScript 6.0 and Prettier, `javac`, PostgreSQL 16 + pgvector 
 | W3C trace context: API → agent/skill spans → gateway, JSON span export | `ai/telemetry.py`, `ai/api/http.py`, `skills/api/gateway.py` | end-to-end propagation test |
 | Runbook and release checklist | `docs/operations/` | reviewed against code |
 
-## Commands actually executed (final state, 2026-10-04)
+## Commands actually executed (session 4, 2026-11-24)
 
 | Command | Result |
 |---|---|
-| `pytest` with `COPILOT_TEST_PGURL` | **150 passed** (unit, integration, contract, pgvector + runtime SQL on PostgreSQL, CLI system test) |
-| `pytest` (no database) | 143 passed, 7 skipped |
-| `ruff check` / `ruff format --check` | clean |
-| `mypy` (strict, 83 files) | no issues |
-| `python -m evals run --suite smoke` / `full` | exit 0; task success 0.846 (n=13) / 0.763 [0.632, 0.895] (n=38); 0 safety violations |
-| `go vet`, `gofmt -l`, `go test -race ./...` | clean; 3 packages ok |
-| `node --test src/api/client.nodetest.ts`; `tsc --strict` on changed web files | 4 passed; no type errors |
-| `python -m evals.load` (c=1, c=8) | 0 errors |
-| `python -m evals.ablation --split dev/test`; `python -m evals.judge calibrate` | exit 0 |
-| `mvn verify`, `npm ci`, Docker builds | not runnable (registries / no daemon) |
+| `ruff check .`, `ruff format --check .`, `mypy` | clean (strict, 103 files) |
+| `pytest -q` | **239 passed, 7 skipped** (the skips need `COPILOT_TEST_PGURL`); includes the contract suite against the Spring jar. With `COPILOT_TEST_PGURL` set to a local PostgreSQL: 243 passed, 4 errors (the pgvector tests; no extension installed) |
+| `python -m evals agent-llm --replay --baseline docs/evaluation/agent_llm_baseline_phase2.json` | exit 0, 0 safety violations |
+| `python -m evals agent-llm --live --record` (twice: Phase 2 code, then Phase 3 code) | 36 cases each; 0 safety violations; `l-027` re-recorded alone afterwards |
+| `npm run lint`, `type-check`, `test`, `format:check`, `build` (apps/frontend) | all pass (18 tests) |
+| `go vet ./...`, `gofmt -l`, `go test ./...` (apps/cli) | clean |
+| `mvn -B verify` (apps/backend, JDK 21) | BUILD SUCCESS (27 tests, coverage gate met) |
+| Live: platform + sandbox + mlx-lm, memory / clarify / async-SSE scenarios | see the gap table; two concurrent runs via the Vite proxy both completed |
+| `./dev.sh --with-backend`, then scripted requests through `localhost:3000` and the compiled CLI | works end to end on the real model (see the gap table) |
+| Not run | GitHub Actions workflows, Docker builds, pgvector tests, a browser walkthrough |
 
 ## Security findings and remaining risks
 
@@ -91,7 +169,9 @@ Remaining:
 - Local PDP is a dev stand-in; the durable store is SQLite (single node) until the PostgreSQL driver is available.
 - Service tokens use a shared HS256 secret (production: asymmetric keys or mTLS).
 - DNS-rebinding window in outbound HTTP (mitigate with network egress policy).
-- Spring Boot 3.3.2 (EOL) and the Spring AI milestone remain in `pom.xml`.
+- Spring Boot 3.5.16 is past OSS support; Boot 4.x is the supported line (follow-up).
+- The model queue limiter is per process; the shared HMAC keys between Spring and the agent are the weakest link between them.
+- G3 live demonstration and the G15 workflows are open (see the gap table).
 - Dashboard page still shows placeholder "—" stats (labelled as not connected, no fake numbers).
 - Web app XSS hardening/CSP review pending its first real build.
 
@@ -110,8 +190,7 @@ Remaining:
 
 ## Exact next step
 
-With registries reachable: `uv lock && uv sync --extra dev --extra orchestration --extra postgres`;
-add a psycopg connection factory for `SqlRuntimeStore` using the `POSTGRES` dialect (schema
-and statements already verified) and run the store tests against it; then the LangGraph
-adapter with `langgraph-checkpoint-postgres`; then the Spring Boot 4.1 implementation of
-`platform-api.yaml` against `tests/contract/`.
+Push the branches and let `python-ci.yml` (replay) and `evals-live.yml` (dispatch) run; click through
+chat, clarification and approval in a browser against `./dev.sh --with-backend`. Then:
+a stronger default model or a hint strategy that lets the planner finish multi-hop requests (G3),
+Spring Boot 4.x, asymmetric keys between platform and agent, and the LangGraph adapter.

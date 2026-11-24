@@ -82,12 +82,14 @@ def build_harness(
     environments: frozenset[str] = frozenset({"sandbox"}),
     fault: tuple[str, int] | None = None,
     embedder: Embedder | None = None,
+    approval_key: str | None = None,
 ) -> Harness:
     sandbox = SandboxConfig.default()
     app = create_app(sandbox)
     client = sandbox.clients[client_id]
     settings = Settings(
         runtime_mode="test",
+        approval_key=SecretStr(approval_key) if approval_key else None,
         environments=environments,
         write_environments=frozenset({"sandbox"}),
         gateways={

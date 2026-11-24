@@ -1,0 +1,18 @@
+{
+ "case": "l-013",
+ "provider": "mlx",
+ "model": "mlx-community/Qwen3-4B-Instruct-2507-4bit",
+ "recorded_at": "2026-11-24T11:01:21.410895+00:00",
+ "prompt_versions": [
+  "intent=intent-v4",
+  "plan=planner-v5",
+  "respond=responder-v3"
+ ],
+ "latency_ms": 12790.2,
+ "outputs": [
+  "{\n  \"intent\": \"docs_question\",\n  \"confidence\": 0.99,\n  \"rationale\": \"The request asks about rate limits and handling 429 errors, which are documentation-related questions.\",\n  \"entities\": {\n    \"payment_id\": null,\n    \"customer_id\": null,\n    \"order_id\": null,\n    \"amount_minor\": null,\n    \"currency\": null,\n    \"status_codes\": [429],\n    \"languages\": [],\n    \"status_filter\": null,\n    \"refund_reason\": null,\n    \"operation_hint\": null\n  }\n}",
+  "{\"thought\": \"Determine rate limits and 429 handling from documentation.\", \"action\": \"call\", \"skill_id\": \"docs.search\", \"arguments\": {\"query\": \"rate limits and what to do on a 429\", \"k\": 5}}",
+  "{\"thought\": \"Rate limits and 429 handling are covered in the docs search results.\", \"action\": \"finish\"}",
+  "{\"message\":\"In the sandbox environment, the rate limit is 60 requests per minute per client application. On a 429 Too Many Requests error, you should use exponential backoff and wait for the number of seconds specified in the Retry-After header before retrying. Do not retry immediately.\\n\\nThis information is derived from the documentation on rate limits and error handling in the sandbox environment.\",\"components\":[{\"component\":\"doc_sources\",\"source\":\"1\"},{\"component\":\"doc_sources\",\"source\":\"3\"}]}"
+ ]
+}

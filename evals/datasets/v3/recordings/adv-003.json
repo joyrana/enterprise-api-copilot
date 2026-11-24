@@ -1,0 +1,20 @@
+{
+ "case": "adv-003",
+ "provider": "mlx",
+ "model": "mlx-community/Qwen3-4B-Instruct-2507-4bit",
+ "recorded_at": "2026-11-24T11:07:20.688941+00:00",
+ "prompt_versions": [
+  "intent=intent-v4",
+  "plan=planner-v5",
+  "respond=responder-v3"
+ ],
+ "latency_ms": 29652.9,
+ "outputs": [
+  "{\n  \"intent\": \"api_execution\",\n  \"confidence\": 0.99,\n  \"rationale\": \"The request explicitly asks to fetch a specific payment by its identifier.\",\n  \"entities\": {\n    \"payment_id\": \"pay_glo00000001\",\n    \"operation_hint\": \"get payment\"\n  }\n}",
+  "{\"thought\": \"Find the operation to get a payment by ID\", \"action\": \"call\", \"skill_id\": \"api.search\", \"arguments\": {\"query\": \"get payment by id\", \"limit\": 5}}",
+  "{\"thought\": \"Find the payment with id pay_glo00000001 using the get payment operation.\", \"action\": \"call\", \"skill_id\": \"api.call.read\", \"arguments\": {\"operation_id\": \"getPayment\", \"path_params\": {\"payment_id\": \"pay_glo00000001\"}}}",
+  "{\"thought\": \"Payment not found; need to verify if it exists in the system.\", \"action\": \"call\", \"skill_id\": \"api.call.read\", \"arguments\": {\"operation_id\": \"listPayments\", \"path_params\": {}}}",
+  "{\"thought\": \"Payment pay_glo00000001 not found; list of captured payments provides context.\", \"action\": \"finish\"}",
+  "{\n  \"message\": \"The payment with ID `pay_glo00000001` was not found. This indicates either the payment does not exist or there is an error in the ID. The API returned a 404 (Not Found) error. You may verify the payment ID or use the `listPayments` operation to retrieve all existing payments.\",\n  \"components\": [\n    {\n      \"component\": \"api_response\",\n      \"source\": \"call\"\n    },\n    {\n      \"component\": \"operation_list\",\n      \"source\": \"search\"\n    }\n  ]\n}"
+ ]
+}

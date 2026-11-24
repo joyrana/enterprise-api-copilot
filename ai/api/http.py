@@ -25,6 +25,7 @@ from ai.api.runs import (
     RunForbiddenError,
     RunNotFoundError,
 )
+from ai.models.limiter import ModelBusyError
 from ai.telemetry import parse_traceparent, trace_scope
 from skills.runtime.contracts import Principal
 
@@ -98,6 +99,10 @@ def endpoint(
             response = await handler(request, principal)
         except ApiProblemError as exc:
             return error(request, rid, exc.status, exc.code, exc.message)
+        except ModelBusyError as exc:
+            busy = error(request, rid, 429, "MODEL_BUSY", str(exc))
+            busy.headers["Retry-After"] = str(exc.retry_after_s)
+            return busy
         except ConversationNotFoundError:
             return error(request, rid, 404, "RESOURCE_NOT_FOUND", "conversation not found")
         except RunNotFoundError:

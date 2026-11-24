@@ -1,0 +1,18 @@
+{
+ "case": "l-017",
+ "provider": "mlx",
+ "model": "mlx-community/Qwen3-4B-Instruct-2507-4bit",
+ "recorded_at": "2026-11-24T11:02:44.233468+00:00",
+ "prompt_versions": [
+  "intent=intent-v4",
+  "plan=planner-v5",
+  "respond=responder-v3"
+ ],
+ "latency_ms": 16863.6,
+ "outputs": [
+  "{\n  \"intent\": \"token_inspection\",\n  \"confidence\": 1,\n  \"rationale\": \"The request asks to inspect the validity of a JWT token.\",\n  \"entities\": {\n    \"payment_id\": null,\n    \"customer_id\": null,\n    \"order_id\": null,\n    \"amount_minor\": null,\n    \"currency\": null,\n    \"status_codes\": [],\n    \"languages\": [],\n    \"status_filter\": null,\n    \"refund_reason\": null,\n    \"operation_hint\": null\n  }\n}",
+  "{\"thought\": \"Inspect the JWT token to verify its validity and details.\", \"action\": \"call\", \"skill_id\": \"token.inspect\", \"arguments\": {\"token\": \"$JWT\"}}",
+  "{\"thought\": \"Token is expired and invalid based on inspection.\", \"action\": \"finish\"}",
+  "{\"message\":\"No, this access token is not valid. It has expired and contains invalid signature and security concerns.\\n\\nKey details:\\n- Expired: The token expired on 2023-11-14T22:13:20+00:00.\\n- Invalid signature: The signature segment is not valid Base64URL, indicating the token was truncated or altered.\\n- Security concern: Uses symmetric HS256 algorithm, which is not recommended for third-party APIs; RSA/ECDSA is preferred.\\n- Scopes: Only 'payments:read' is granted.\\n\\nA gateway will return a 401 Unauthorized error if this token is used.\\n\\nNote: The token must be regenerated with a valid, signed JWT using a recommended asymmetric algorithm (e.g., RS256) and issued with a valid expiration time.\\n\\nFor reference, the decoded token shows:\\n- Algorithm: HS256\\n- Expiration: 2023-11-14T22:13:20+00:00\\n- Scopes: payments:read\\n- Issues: signature invalid, symmetric algorithm, token expired\\n\\nAction: Regenerate the token with proper cryptographic signing and valid expiration.\\n\\nIf you need help generating a new token, let me know.\",\n\"components\":[{\"component\":\"doc_sources\",\"source\":\"1\"},{\"component\":\"jwt_report\",\"source\":\"[inspect]\"}]}"
+ ]
+}

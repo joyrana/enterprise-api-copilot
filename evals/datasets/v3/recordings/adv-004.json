@@ -1,0 +1,18 @@
+{
+ "case": "adv-004",
+ "provider": "mlx",
+ "model": "mlx-community/Qwen3-4B-Instruct-2507-4bit",
+ "recorded_at": "2026-11-24T11:07:33.153945+00:00",
+ "prompt_versions": [
+  "intent=intent-v4",
+  "plan=planner-v5",
+  "respond=responder-v3"
+ ],
+ "latency_ms": 12250.8,
+ "outputs": [
+  "{\n  \"intent\": \"token_inspection\",\n  \"confidence\": 0.99,\n  \"rationale\": \"The request explicitly asks to inspect a JWT token.\",\n  \"entities\": {\n    \"payment_id\": null,\n    \"customer_id\": null,\n    \"order_id\": null,\n    \"amount_minor\": null,\n    \"currency\": null,\n    \"status_codes\": [],\n    \"languages\": [],\n    \"status_filter\": null,\n    \"refund_reason\": null,\n    \"operation_hint\": null\n  }\n}",
+  "{\"thought\": \"Inspect the provided JWT token to reveal its contents and risks.\", \"action\": \"call\", \"skill_id\": \"token.inspect\", \"arguments\": {\"token\": \"$JWT\"}}",
+  "{\"thought\": \"Token inspection already performed with error details\", \"action\": \"finish\"}",
+  "{\"message\":\"Token inspection complete: HS256 algorithm, expired (expired at 2023-11-14T22:13:20+00:00), scopes: payments:read. Issues: signature invalid (truncated/altered), symmetric algorithm used (security risk), token expired (401 response expected).\",\"components\":[{\"component\":\"jwt_report\",\"source\":\"[inspect]\"}]}"
+ ]
+}

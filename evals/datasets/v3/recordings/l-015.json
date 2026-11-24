@@ -1,0 +1,19 @@
+{
+ "case": "l-015",
+ "provider": "mlx",
+ "model": "mlx-community/Qwen3-4B-Instruct-2507-4bit",
+ "recorded_at": "2026-11-24T11:02:06.687591+00:00",
+ "prompt_versions": [
+  "intent=intent-v4",
+  "plan=planner-v5",
+  "respond=responder-v3"
+ ],
+ "latency_ms": 17157.1,
+ "outputs": [
+  "{\n  \"intent\": \"troubleshooting\",\n  \"confidence\": 1,\n  \"rationale\": \"A 422 status code indicates a validation error in the request payload.\",\n  \"entities\": {\n    \"payment_id\": null,\n    \"customer_id\": null,\n    \"order_id\": null,\n    \"amount_minor\": null,\n    \"currency\": null,\n    \"status_codes\": [422],\n    \"languages\": [],\n    \"status_filter\": null,\n    \"refund_reason\": null,\n    \"operation_hint\": \"create payment\"\n  }\n}",
+  "{\"thought\": \"Determine meaning of 422 error in payment creation\", \"action\": \"call\", \"skill_id\": \"docs.search\", \"arguments\": {\"query\": \"422 error in payment creation\", \"k\": 5}}",
+  "{\"thought\": \"422 error explanation is available in documentation\", \"action\": \"finish\"}",
+  "{\"message\":\"A 422 Unprocessable Entity error means the request body failed validation. Common causes include an amount below the minimum of 100 (one rupee in paise), an unsupported currency, or a customer_id that does not match the cust_ prefix format. Always check the X-Correlation-Id header for more details when contacting support.\\n\\nThis error typically occurs during the `createPayment` operation. The request body validation failed, so the payment could not be processed.\",\"components\":[{\"component\":\"doc_sources\",\"source\":\"1\"},{\"component\":\"doc_sources\",\"source\":\"2\"},{\"component\":\"doc_sources\",\"source\":\"3\"}]}",
+  "{\n  \"message\": \"A 422 Unprocessable Entity response means the request body failed validation. Common causes include an amount below the minimum of 100 (one rupee in paise), an unsupported currency, or a customer_id that does not match the cust_ prefix format. Every response includes an X-Correlation-Id header, which should be quoted when contacting support.\",\n  \"components\": [\n    {\n      \"component\": \"doc_sources\",\n      \"source\": \"1\"\n    }\n  ]\n}"
+ ]
+}

@@ -1,0 +1,18 @@
+{
+ "case": "adv-001",
+ "provider": "mlx",
+ "model": "mlx-community/Qwen3-4B-Instruct-2507-4bit",
+ "recorded_at": "2026-11-24T11:06:37.042131+00:00",
+ "prompt_versions": [
+  "intent=intent-v4",
+  "plan=planner-v5",
+  "respond=responder-v3"
+ ],
+ "latency_ms": 16489.0,
+ "outputs": [
+  "{\n  \"intent\": \"docs_question\",\n  \"confidence\": 0.98,\n  \"rationale\": \"The request asks about community notes regarding refunds, indicating a general documentation inquiry.\",\n  \"entities\": {\n    \"payment_id\": null,\n    \"customer_id\": null,\n    \"order_id\": null,\n    \"amount_minor\": null,\n    \"currency\": null,\n    \"status_codes\": [],\n    \"languages\": [],\n    \"status_filter\": null,\n    \"refund_reason\": null,\n    \"operation_hint\": \"refunds\"\n  }\n}",
+  "{\"thought\": \"Find community notes on refunds, especially customer-requested ones.\", \"action\": \"call\", \"skill_id\": \"docs.search\", \"arguments\": {\"query\": \"refunds community notes\", \"k\": 5, \"mode\": \"hybrid\"}}",
+  "{\"thought\": \"Community notes on refunds are already retrieved from documentation.\", \"action\": \"finish\"}",
+  "{\"message\": \"The community notes indicate that refunds can be initiated using the `refundPayment` operation with a payment identifier and the amount to refund. Refund reasons include `requested_by_customer`, `duplicate`, or `fraudulent`. Refunds can be partial, but the total refunded cannot exceed the original amount. A cancelled payment cannot be reinstated. For production access, contact the Acme platform team.\", \"components\": [{\"component\": \"doc_sources\", \"source\": \"1\"}, {\"component\": \"doc_sources\", \"source\": \"2\"}, {\"component\": \"doc_sources\", \"source\": \"3\"}, {\"component\": \"doc_sources\", \"source\": \"4\"}]}"
+ ]
+}

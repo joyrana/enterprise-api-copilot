@@ -1,0 +1,19 @@
+{
+ "case": "l-005",
+ "provider": "mlx",
+ "model": "mlx-community/Qwen3-4B-Instruct-2507-4bit",
+ "recorded_at": "2026-11-24T10:58:50.093944+00:00",
+ "prompt_versions": [
+  "intent=intent-v4",
+  "plan=planner-v5",
+  "respond=responder-v3"
+ ],
+ "latency_ms": 16606.4,
+ "outputs": [
+  "{\n  \"intent\": \"api_explanation\",\n  \"confidence\": 1,\n  \"rationale\": \"The request asks for details on scopes and required fields for the createPayment operation.\",\n  \"entities\": {\n    \"payment_id\": null,\n    \"customer_id\": null,\n    \"order_id\": null,\n    \"amount_minor\": null,\n    \"currency\": null,\n    \"status_codes\": [],\n    \"languages\": [],\n    \"status_filter\": null,\n    \"refund_reason\": null,\n    \"operation_hint\": \"createPayment\"\n  }\n}",
+  "{\"thought\": \"Find the createPayment operation to retrieve its scopes and fields\", \"action\": \"call\", \"skill_id\": \"api.search\", \"arguments\": {\"query\": \"createPayment\"}}",
+  "{\"thought\": \"Find details on createPayment operation scopes and fields\", \"action\": \"call\", \"skill_id\": \"api.describe\", \"arguments\": {\"operation_id\": \"createPayment\"}}",
+  "{\"thought\": \"Retrieved createPayment operation details; explain scopes and required fields\", \"action\": \"finish\"}",
+  "{\"message\":\"The `createPayment` operation requires the `payments:write` scope for authentication. The request body must include `amount` (in smallest currency unit, e.g., paise for INR), `currency` (one of INR, USD, EUR), and `customer_id`. The operation supports an Idempotency-Key header to ensure idempotency; retries with the same key return the original payment. Valid responses include 201 (Payment created), 401 (invalid token), 403 (missing scope), 409 (reused idempotency key), 422 (validation error), and 429 (rate limit).\",\"components\":[{\"component\":\"operation_detail\",\"source\":\"describe\"},{\"component\":\"api_response\",\"source\":\"\"}]}"
+ ]
+}

@@ -30,8 +30,29 @@ paths:
                   status: {type: string, enum: [UP]}
                   skills: {type: integer}
   /internal/v1/runs:
+    get:
+      operationId: agentListRuns
+      parameters:
+        - {name: status, in: query, schema: {$ref: "./platform-api.yaml#/components/schemas/RunStatus"}}
+        - {name: limit, in: query, schema: {type: integer, minimum: 1, maximum: 100, default: 20}}
+      responses:
+        "400": {$ref: "#/components/responses/Error"}
+        "401": {$ref: "#/components/responses/Error"}
+        "200":
+          description: Runs of the caller's tenant, newest first
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [runs]
+                properties:
+                  runs:
+                    type: array
+                    items: {$ref: "./platform-api.yaml#/components/schemas/Run"}
     post:
       operationId: startRun
+      parameters:
+        - {name: mode, in: query, schema: {type: string, enum: [sync, async], default: sync}}
       requestBody:
         required: true
         content:
@@ -54,6 +75,130 @@ paths:
               schema: {$ref: "./platform-api.yaml#/components/schemas/Run"}
         "404": {$ref: "#/components/responses/Error"}
         "401": {$ref: "#/components/responses/Error"}
+        "202":
+          description: Accepted (mode=async); the run is RUNNING
+          content:
+            application/json:
+              schema: {$ref: "./platform-api.yaml#/components/schemas/Run"}
+        "429":
+          description: The model queue is full
+          headers:
+            Retry-After: {schema: {type: integer, minimum: 1}}
+          content:
+            application/json:
+              schema: {$ref: "./platform-api.yaml#/components/schemas/ApiError"}
+  /internal/v1/skills:
+    get:
+      operationId: agentListSkills
+      responses:
+        "401": {$ref: "#/components/responses/Error"}
+        "200":
+          description: Registered skills
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [skills]
+                properties:
+                  skills:
+                    type: array
+                    items: {$ref: "./platform-api.yaml#/components/schemas/Skill"}
+  /internal/v1/apis/search:
+    get:
+      operationId: agentSearchApis
+      parameters:
+        - {name: q, in: query, required: true, schema: {type: string, minLength: 1, maxLength: 500}}
+        - {name: limit, in: query, schema: {type: integer, minimum: 1, maximum: 20, default: 5}}
+      responses:
+        "400": {$ref: "#/components/responses/Error"}
+        "401": {$ref: "#/components/responses/Error"}
+        "200":
+          description: Ranked operations
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [results]
+                properties:
+                  results:
+                    type: array
+                    items: {$ref: "./platform-api.yaml#/components/schemas/ApiSearchHit"}
+  /internal/v1/apis/{operationId}:
+    get:
+      operationId: agentDescribeApi
+      parameters:
+        - {name: operationId, in: path, required: true, schema: {type: string, maxLength: 200}}
+      responses:
+        "401": {$ref: "#/components/responses/Error"}
+        "200":
+          description: Operation contract
+          content:
+            application/json:
+              schema: {$ref: "./platform-api.yaml#/components/schemas/ApiOperation"}
+        "404": {$ref: "#/components/responses/Error"}
+  /internal/v1/conversations:
+    post:
+      operationId: agentCreateConversation
+      responses:
+        "401": {$ref: "#/components/responses/Error"}
+        "201":
+          description: An empty conversation for the caller's tenant
+          content:
+            application/json:
+              schema: {$ref: "./platform-api.yaml#/components/schemas/Conversation"}
+  /internal/v1/conversations/{conversationId}:
+    get:
+      operationId: agentGetConversation
+      parameters:
+        - {name: conversationId, in: path, required: true, schema: {type: string, pattern: "^conv_[0-9a-f]{16}$"}}
+      responses:
+        "401": {$ref: "#/components/responses/Error"}
+        "200":
+          description: The conversation and its runs, oldest first
+          content:
+            application/json:
+              schema: {$ref: "./platform-api.yaml#/components/schemas/Conversation"}
+        "404": {$ref: "#/components/responses/Error"}
+  /internal/v1/runs/{runId}/reject:
+    post:
+      operationId: rejectAgentRun
+      description: Ends a run that is awaiting approval without executing it. The platform has already checked that the caller (the token's principal) may approve.
+      parameters:
+        - {name: runId, in: path, required: true, schema: {type: string, pattern: "^run_[0-9a-f]{16}$"}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                reason: {type: string, maxLength: 500}
+      responses:
+        "400": {$ref: "#/components/responses/Error"}
+        "401": {$ref: "#/components/responses/Error"}
+        "413": {$ref: "#/components/responses/Error"}
+        "200":
+          description: Rejected
+          content:
+            application/json:
+              schema: {$ref: "./platform-api.yaml#/components/schemas/Run"}
+        "404": {$ref: "#/components/responses/Error"}
+        "409": {$ref: "#/components/responses/Error"}
+  /internal/v1/runs/{runId}/events:
+    get:
+      operationId: streamAgentRunEvents
+      parameters:
+        - {name: runId, in: path, required: true, schema: {type: string, pattern: "^run_[0-9a-f]{16}$"}}
+        - {name: Last-Event-ID, in: header, schema: {type: integer, minimum: 0}}
+      responses:
+        "401": {$ref: "#/components/responses/Error"}
+        "200":
+          description: Server-Sent Events, as in the platform API
+          content:
+            text/event-stream:
+              schema: {type: string}
+        "404": {$ref: "#/components/responses/Error"}
   /internal/v1/runs/{runId}:
     get:
       operationId: getAgentRun
@@ -109,6 +254,7 @@ paths:
               required: [approval_token]
               properties:
                 approval_token: {type: string, minLength: 10, maxLength: 4096}
+                approver: {type: string, minLength: 1, maxLength: 128, description: Subject the platform vetted; recorded as an approved event}
       responses:
         "400": {$ref: "#/components/responses/Error"}
         "401": {$ref: "#/components/responses/Error"}
