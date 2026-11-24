@@ -141,11 +141,27 @@ class RunService:
             raise ConversationNotFoundError(conversation_id)
         return conversation
 
+    def conversation_for(self, conversation_id: str, principal: Principal) -> Conversation:
+        """The caller's own conversation; anyone else's reads as missing.
+
+        Conversations are private to their creator, not just to the tenant: earlier turns
+        are fed to the model, and text typed in them grounds argument values, so another
+        user's turns must never reach (or ground) this caller's run.
+        """
+        conversation = self.get_conversation(conversation_id, principal.tenant_id)
+        if conversation.created_by != principal.subject:
+            raise ConversationNotFoundError(conversation_id)
+        return conversation
+
     def conversation_runs(self, conversation: Conversation) -> list[RunState]:
         states = []
         for run_id in conversation.run_ids:
             state = self.store.load(run_id)
-            if state is not None and state.principal.tenant_id == conversation.tenant_id:
+            if (
+                state is not None
+                and state.principal.tenant_id == conversation.tenant_id
+                and state.principal.subject == conversation.created_by
+            ):
                 states.append(state)
         return states
 
@@ -155,7 +171,7 @@ class RunService:
         """Earlier-turn context, plus the run (if any) that is waiting for an answer."""
         if conversation_id is None:
             return None, None
-        conversation = self.get_conversation(conversation_id, principal.tenant_id)
+        conversation = self.conversation_for(conversation_id, principal)
         previous = self.conversation_runs(conversation)
         if previous and self.orchestrator.awaiting_clarification(previous[-1]):
             return None, previous[-1]
@@ -248,6 +264,10 @@ class RunService:
     async def clarify(self, run_id: str, principal: Principal, message: str) -> RunState:
         async with self._lock(run_id):
             state = self.get(run_id, principal.tenant_id)
+            if state.principal.subject != principal.subject:
+                # The answer grounds argument values and the run keeps the requester's
+                # permissions, so only the requester may give it (no confused deputy).
+                raise RunForbiddenError("only the user who started this run can answer it")
             if not self.orchestrator.awaiting_clarification(state):
                 raise RunConflictError("run is not waiting for a clarification")
             resumed = await self.orchestrator.clarify(run_id, message)

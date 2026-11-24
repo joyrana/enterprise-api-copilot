@@ -135,7 +135,7 @@ def create_agent_app(
         return json({"runs": [RunView.of(s).model_dump(mode="json") for s in listed]})
 
     def conversation_json(conversation_id: str, p: Principal, status: int = 200) -> Response:
-        conversation = runs.get_conversation(conversation_id, p.tenant_id)
+        conversation = runs.conversation_for(conversation_id, p)
         return json(
             {
                 "conversation_id": conversation.conversation_id,
