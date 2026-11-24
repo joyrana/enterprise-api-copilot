@@ -439,6 +439,9 @@ export function ApprovalRequest({ data }: { data: Props }) {
 
 export function Clarification({ data }: { data: Props }) {
   const fields = asArray<string>(data.missing_fields);
+  const { run, clarify, busy } = useGenUIActions();
+  const [answer, setAnswer] = useState('');
+  const canAnswer = clarify !== undefined && run?.status === 'NEEDS_CLARIFICATION';
   return (
     <Panel
       icon={<AlertTriangle className="w-4 h-4" />}
@@ -455,6 +458,35 @@ export function Clarification({ data }: { data: Props }) {
         </ul>
       ) : null}
       <p className="text-xs text-gray-400">Reply with the missing values to continue.</p>
+      {canAnswer && (
+        <form
+          className="flex gap-2 mt-2"
+          onSubmit={(e) => {
+            e.preventDefault();
+            const text = answer.trim();
+            if (text && !busy) {
+              clarify(text);
+              setAnswer('');
+            }
+          }}
+        >
+          <input
+            value={answer}
+            onChange={(e) => setAnswer(e.target.value)}
+            aria-label="Answer the question"
+            placeholder="e.g. ₹500"
+            maxLength={4000}
+            className="flex-1 bg-gray-900 border border-gray-800 rounded-lg px-3 py-1.5 text-sm text-gray-100"
+          />
+          <button
+            type="submit"
+            className="btn-primary px-3 py-1.5"
+            disabled={busy || !answer.trim()}
+          >
+            Continue
+          </button>
+        </form>
+      )}
     </Panel>
   );
 }

@@ -31,6 +31,12 @@ class _Start(BaseModel):
     model_config = ConfigDict(extra="forbid")
     query: str = Field(min_length=1, max_length=4000)
     environment: str = Field(min_length=1, max_length=64)
+    conversation_id: str | None = Field(default=None, pattern=r"^conv_[0-9a-f]{16}$")
+
+
+class _Clarify(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    message: str = Field(min_length=1, max_length=4000)
 
 
 class _Resume(BaseModel):
@@ -62,7 +68,9 @@ def create_agent_app(
         p = assert_principal(principal)
         body = await parse_body(request, _Start)
         return json(
-            RunView.of(await runs.start(p, body.query, body.environment)).model_dump(mode="json"),
+            RunView.of(
+                await runs.start(p, body.query, body.environment, body.conversation_id)
+            ).model_dump(mode="json"),
             201,
         )
 
@@ -80,12 +88,23 @@ def create_agent_app(
         )
         return json(RunView.of(state).model_dump(mode="json"))
 
+    async def clarify(request: Request, principal: Principal | None) -> Response:
+        p = assert_principal(principal)
+        body = await parse_body(request, _Clarify)
+        state = await runs.clarify(request.path_params["run_id"], p, body.message)
+        return json(RunView.of(state).model_dump(mode="json"))
+
     return Starlette(
         routes=[
             Route("/internal/v1/health", endpoint(health, authority=None), methods=["GET"]),
             Route("/internal/v1/runs", endpoint(start, authority=authority), methods=["POST"]),
             Route(
                 "/internal/v1/runs/{run_id}", endpoint(get, authority=authority), methods=["GET"]
+            ),
+            Route(
+                "/internal/v1/runs/{run_id}/clarify",
+                endpoint(clarify, authority=authority),
+                methods=["POST"],
             ),
             Route(
                 "/internal/v1/runs/{run_id}/resume",

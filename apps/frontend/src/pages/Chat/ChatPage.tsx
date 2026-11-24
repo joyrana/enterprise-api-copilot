@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import Markdown from 'react-markdown';
 import { Send, Loader2, Bot, User, Sparkles } from 'lucide-react';
 import { ApiError, type Run } from '@/api/client';
@@ -44,6 +44,8 @@ export function ChatPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [signedIn, setSignedIn] = useState<boolean>(() => getToken() !== null);
   const [devUser, setDevUser] = useState('alice');
+  // One conversation per page load: earlier turns give the agent context for follow-ups.
+  const conversation = useRef<string | undefined>(undefined);
 
   const append = (message: Message) => setMessages((prev) => [...prev, message]);
   const stamp = () => `${Date.now()}-${Math.random().toString(16).slice(2)}`;
@@ -73,7 +75,10 @@ export function ChatPage() {
     setInput('');
     setIsLoading(true);
     try {
-      showRun(await platform.createRun(query));
+      if (!conversation.current) {
+        conversation.current = (await platform.createConversation()).conversation_id;
+      }
+      showRun(await platform.createRun(query, 'sandbox', conversation.current));
     } catch (err) {
       append({ id: stamp(), role: 'error', content: describeError(err), timestamp: new Date() });
     } finally {
@@ -89,6 +94,18 @@ export function ChatPage() {
         ? await platform.approveRun(run.run_id, run.pending_approval.action_hash)
         : await platform.rejectRun(run.run_id, 'rejected in web app');
       showRun(updated);
+    } catch (err) {
+      append({ id: stamp(), role: 'error', content: describeError(err), timestamp: new Date() });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const clarify = async (run: Run, answer: string) => {
+    append({ id: stamp(), role: 'user', content: answer, timestamp: new Date() });
+    setIsLoading(true);
+    try {
+      showRun(await platform.clarifyRun(run.run_id, answer));
     } catch (err) {
       append({ id: stamp(), role: 'error', content: describeError(err), timestamp: new Date() });
     } finally {
@@ -197,6 +214,7 @@ export function ChatPage() {
                   run={message.run}
                   busy={isLoading}
                   decide={(approve) => message.run && decide(message.run, approve)}
+                  clarify={(answer) => message.run && clarify(message.run, answer)}
                 />
               )}
               <p className="text-xs opacity-50 mt-1">{message.timestamp.toLocaleTimeString()}</p>

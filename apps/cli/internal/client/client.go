@@ -207,6 +207,36 @@ func (c *Client) CreateRun(ctx context.Context, query, environment string) (Run,
 	return r, c.do(ctx, http.MethodPost, "/api/v1/runs", nil, body, &r)
 }
 
+// CreateRunIn is CreateRun inside a conversation. If the conversation's latest run is
+// waiting for an answer, the server routes the message to it.
+func (c *Client) CreateRunIn(ctx context.Context, query, environment, conversationID string) (Run, error) {
+	var r Run
+	body := map[string]string{"query": query, "environment": environment}
+	if conversationID != "" {
+		body["conversation_id"] = conversationID
+	}
+	return r, c.do(ctx, http.MethodPost, "/api/v1/runs", nil, body, &r)
+}
+
+// CreateConversation starts an empty conversation.
+func (c *Client) CreateConversation(ctx context.Context) (Conversation, error) {
+	var v Conversation
+	return v, c.do(ctx, http.MethodPost, "/api/v1/conversations", nil, nil, &v)
+}
+
+// GetConversation fetches a conversation and its runs.
+func (c *Client) GetConversation(ctx context.Context, id string) (Conversation, error) {
+	var v Conversation
+	return v, c.do(ctx, http.MethodGet, "/api/v1/conversations/"+url.PathEscape(id), nil, nil, &v)
+}
+
+// Clarify answers a run that is waiting for missing values.
+func (c *Client) Clarify(ctx context.Context, runID, message string) (Run, error) {
+	var r Run
+	body := map[string]string{"message": message}
+	return r, c.do(ctx, http.MethodPost, "/api/v1/runs/"+url.PathEscape(runID)+"/clarify", nil, body, &r)
+}
+
 // ListRuns lists runs in the caller's tenant (status may be empty).
 func (c *Client) ListRuns(ctx context.Context, status string, limit int) ([]Run, error) {
 	var out struct {

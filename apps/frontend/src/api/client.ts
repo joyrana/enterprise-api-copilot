@@ -72,6 +72,14 @@ export interface Run {
   mode?: 'agentic' | 'deterministic';
   ui?: UIComponent[];
   model?: ModelUsage | null;
+  conversation_id?: string | null;
+}
+
+export interface Conversation {
+  conversation_id: string;
+  created_at: string;
+  created_by?: string;
+  runs: Run[];
 }
 
 export interface Me {
@@ -133,6 +141,7 @@ export interface ClientOptions {
 
 const ACTION_HASH = /^[0-9a-f]{64}$/;
 const RUN_ID = /^run_[0-9a-f]{16}$/;
+const CONVERSATION_ID = /^conv_[0-9a-f]{16}$/;
 
 function assertRunId(runId: string): void {
   if (!RUN_ID.test(runId)) {
@@ -200,8 +209,32 @@ export function createClient(options: ClientOptions = {}) {
           limit: String(limit),
         })
       ).results,
-    createRun: (query: string, environment = 'sandbox') =>
-      request<Run>('POST', '/api/v1/runs', { query, environment }),
+    /**
+     * With a conversation id, earlier turns give the agent context; if the conversation's
+     * latest run is waiting for an answer, the server routes the message to it.
+     */
+    createRun: (query: string, environment = 'sandbox', conversationId?: string) => {
+      if (conversationId !== undefined && !CONVERSATION_ID.test(conversationId)) {
+        throw new Error(`invalid conversation id: ${conversationId}`);
+      }
+      return request<Run>('POST', '/api/v1/runs', {
+        query,
+        environment,
+        ...(conversationId ? { conversation_id: conversationId } : {}),
+      });
+    },
+    createConversation: () => request<Conversation>('POST', '/api/v1/conversations'),
+    getConversation: (conversationId: string) => {
+      if (!CONVERSATION_ID.test(conversationId)) {
+        throw new Error(`invalid conversation id: ${conversationId}`);
+      }
+      return request<Conversation>('GET', `/api/v1/conversations/${conversationId}`);
+    },
+    /** Answers a NEEDS_CLARIFICATION run; the blocked call is re-grounded, writes still need approval. */
+    clarifyRun: (runId: string, message: string) => {
+      assertRunId(runId);
+      return request<Run>('POST', `/api/v1/runs/${runId}/clarify`, { message });
+    },
     listRuns: async (status?: RunStatus, limit = 20) => {
       const query: Record<string, string> = { limit: String(limit) };
       if (status) {

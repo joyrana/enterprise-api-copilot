@@ -276,6 +276,92 @@ def test_reject_flow(env: tuple[TestClient, Harness]) -> None:
     assert len(h.app.state.sandbox.tenant("acme").payments) == before
 
 
+def test_conversations_and_clarification(env: tuple[TestClient, Harness]) -> None:
+    client, h = env
+    alice, priya, gina = login(client, "alice"), login(client, "priya"), login(client, "gina")
+    vic = login(client, "vic")  # same tenant as alice, viewer role
+    conv = call(client, "POST", "/api/v1/conversations", alice).json()
+    cid = conv["conversation_id"]
+    assert conv["runs"] == []
+    # Another tenant's conversation is indistinguishable from a missing one.
+    assert call(client, "GET", f"/api/v1/conversations/{cid}", gina).status_code == 404
+    assert (
+        call(
+            client,
+            "POST",
+            "/api/v1/runs",
+            gina,
+            json={"query": "list orders", "conversation_id": cid},
+        ).status_code
+        == 404
+    )
+    # Conversations are private to their creator, not just the tenant: earlier turns reach
+    # the model and ground values, so a colleague can neither read nor post into one.
+    assert call(client, "GET", f"/api/v1/conversations/{cid}", vic).status_code == 404
+    assert (
+        call(
+            client,
+            "POST",
+            "/api/v1/runs",
+            vic,
+            json={"query": "list orders", "conversation_id": cid},
+        ).status_code
+        == 404
+    )
+    missing = "conv_" + "0" * 16
+    assert call(client, "GET", f"/api/v1/conversations/{missing}", alice).status_code == 404
+
+    asked = call(
+        client,
+        "POST",
+        "/api/v1/runs",
+        alice,
+        json={"query": "Create a payment for customer cust_acm0002", "conversation_id": cid},
+    ).json()
+    assert asked["status"] == "NEEDS_CLARIFICATION" and asked["conversation_id"] == cid
+    assert {"body.amount", "body.currency"} <= set(asked["missing_fields"])
+    # Clarifying a run that is not waiting is a conflict; unknown/foreign runs are 404.
+    assert (
+        call(
+            client, "POST", f"/api/v1/runs/{asked['run_id']}/clarify", gina, json={"message": "x"}
+        ).status_code
+        == 404
+    )
+    # Only the requester answers: the answer grounds values and the run keeps the
+    # requester's permissions, so a viewer must not be able to supply an amount.
+    assert (
+        call(
+            client, "POST", f"/api/v1/runs/{asked['run_id']}/clarify", vic, json={"message": "₹9"}
+        ).status_code
+        == 403
+    )
+    before = len(h.app.state.sandbox.tenant("acme").payments)
+    paused = call(
+        client, "POST", f"/api/v1/runs/{asked['run_id']}/clarify", alice, json={"message": "₹500"}
+    ).json()
+    assert paused["run_id"] == asked["run_id"] and paused["status"] == "AWAITING_APPROVAL"
+    assert '"amount": 50000' in paused["pending_approval"]["summary"]
+    assert len(h.app.state.sandbox.tenant("acme").payments) == before
+    again = call(
+        client, "POST", f"/api/v1/runs/{asked['run_id']}/clarify", alice, json={"message": "₹500"}
+    )
+    assert again.status_code == 409
+    done = call(
+        client,
+        "POST",
+        f"/api/v1/runs/{asked['run_id']}/approve",
+        priya,
+        json={"action_hash": paused["pending_approval"]["action_hash"]},
+    ).json()
+    assert done["status"] == "COMPLETED" and "HTTP 201" in done["message"]
+    listed = call(client, "GET", f"/api/v1/conversations/{cid}", alice).json()
+    assert [r["run_id"] for r in listed["runs"]] == [asked["run_id"]]
+    assert (
+        call(client, "POST", f"/api/v1/runs/{asked['run_id']}/clarify", alice, json={}).status_code
+        == 400
+    )
+
+
 def test_tenant_isolation(env: tuple[TestClient, Harness]) -> None:
     client, _ = env
     alice, gina = login(client, "alice"), login(client, "gina")

@@ -14,6 +14,7 @@ import os
 import secrets
 import uuid
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 
 from pydantic import BaseModel, ConfigDict, Field
 from starlette.applications import Starlette
@@ -79,6 +80,12 @@ class _RunCreate(BaseModel):
     model_config = ConfigDict(extra="forbid")
     query: str = Field(min_length=1, max_length=4000)
     environment: str = Field(default="sandbox", min_length=1, max_length=64)
+    conversation_id: str | None = Field(default=None, pattern=r"^conv_[0-9a-f]{16}$")
+
+
+class _Clarify(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    message: str = Field(min_length=1, max_length=4000)
 
 
 class _Approve(BaseModel):
@@ -208,7 +215,7 @@ def create_platform_app(services: Services, config: PlatformConfig | None = None
     async def create_run(request: Request, principal: Principal | None) -> Response:
         p = assert_principal(principal)
         body = await parse_body(request, _RunCreate)
-        state = await runs.start(p, body.query, body.environment)
+        state = await runs.start(p, body.query, body.environment, body.conversation_id)
         return _run_json(RunView.of(state), 201)
 
     async def list_runs(request: Request, principal: Principal | None) -> Response:
@@ -242,6 +249,36 @@ def create_platform_app(services: Services, config: PlatformConfig | None = None
             RunView.of(await runs.reject(request.path_params["run_id"], p, body.reason))
         )
 
+    def _conversation_json(conversation_id: str, p: Principal, status: int = 200) -> Response:
+        conversation = runs.conversation_for(conversation_id, p)
+        return json(
+            {
+                "conversation_id": conversation.conversation_id,
+                "created_at": datetime.fromtimestamp(conversation.created_at, UTC).isoformat(),
+                "created_by": conversation.created_by,
+                "runs": [
+                    RunView.of(s).model_dump(mode="json")
+                    for s in runs.conversation_runs(conversation)
+                ],
+            },
+            status,
+        )
+
+    async def create_conversation(request: Request, principal: Principal | None) -> Response:
+        p = assert_principal(principal)
+        return _conversation_json(runs.create_conversation(p).conversation_id, p, 201)
+
+    async def get_conversation(request: Request, principal: Principal | None) -> Response:
+        p = assert_principal(principal)
+        return _conversation_json(request.path_params["conversation_id"], p)
+
+    async def clarify(request: Request, principal: Principal | None) -> Response:
+        p = assert_principal(principal)
+        body = await parse_body(request, _Clarify)
+        return _run_json(
+            RunView.of(await runs.clarify(request.path_params["run_id"], p, body.message))
+        )
+
     public = {"authority": None}
     secured = {"authority": authority}
     app = Starlette(
@@ -256,6 +293,15 @@ def create_platform_app(services: Services, config: PlatformConfig | None = None
             Route("/api/v1/runs", endpoint(list_runs, **secured), methods=["GET"]),
             Route("/api/v1/runs/{run_id}", endpoint(get_run, **secured), methods=["GET"]),
             Route("/api/v1/runs/{run_id}/approve", endpoint(approve, **secured), methods=["POST"]),
+            Route("/api/v1/runs/{run_id}/clarify", endpoint(clarify, **secured), methods=["POST"]),
+            Route(
+                "/api/v1/conversations", endpoint(create_conversation, **secured), methods=["POST"]
+            ),
+            Route(
+                "/api/v1/conversations/{conversation_id}",
+                endpoint(get_conversation, **secured),
+                methods=["GET"],
+            ),
             Route("/api/v1/runs/{run_id}/reject", endpoint(reject, **secured), methods=["POST"]),
         ]
     )

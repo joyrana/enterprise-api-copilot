@@ -25,6 +25,7 @@ import asyncio
 import sqlite3
 import threading
 import time
+import uuid
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -32,10 +33,14 @@ from pathlib import Path
 from typing import Any
 
 from ai.agent.contracts import RunState
+from ai.agent.conversations import Conversation
 from skills.runtime.contracts import SkillResult
 from skills.runtime.idempotency import IdempotencyRecord
 
-SCHEMA_SQLITE = Path(__file__).resolve().parent / "sql" / "V001__runtime.sqlite.sql"
+SQL_DIR = Path(__file__).resolve().parent / "sql"
+SCHEMA_SQLITE = SQL_DIR / "V001__runtime.sqlite.sql"
+# Applied in order on start-up; every file is idempotent (``IF NOT EXISTS``).
+MIGRATIONS_SQLITE = (SCHEMA_SQLITE, SQL_DIR / "V002__conversations.sqlite.sql")
 
 # Portable statements ("?" placeholders, rewritten per dialect). Tested on SQLite and,
 # via PREPARE, on PostgreSQL (tests/integration/test_runtime_sql_postgres.py).
@@ -53,6 +58,23 @@ STATEMENTS: dict[str, str] = {
     "list_runs_status": (
         "SELECT state_json FROM runtime_runs WHERE tenant_id = ? AND status = ? "
         "ORDER BY created_at DESC LIMIT ?"
+    ),
+    "create_conversation": (
+        "INSERT INTO runtime_conversations (conversation_id, tenant_id, created_by, created_at) "
+        "VALUES (?, ?, ?, ?)"
+    ),
+    "get_conversation": (
+        "SELECT conversation_id, tenant_id, created_by, created_at FROM runtime_conversations "
+        "WHERE conversation_id = ? AND tenant_id = ?"
+    ),
+    "add_conversation_run": (
+        "INSERT INTO runtime_conversation_runs (run_id, conversation_id, tenant_id, added_at) "
+        "SELECT ?, ?, ?, ? WHERE EXISTS (SELECT 1 FROM runtime_conversations "
+        "WHERE conversation_id = ? AND tenant_id = ?) ON CONFLICT (run_id) DO NOTHING"
+    ),
+    "conversation_runs": (
+        "SELECT run_id FROM runtime_conversation_runs "
+        "WHERE conversation_id = ? AND tenant_id = ? ORDER BY added_at, run_id"
     ),
     "purge_approvals": "DELETE FROM runtime_used_approvals WHERE expires_at < ?",
     "consume_approval": (
@@ -113,7 +135,8 @@ class SqlRuntimeStore:
             conn = sqlite3.connect(str(path), check_same_thread=False, isolation_level=None)
             conn.execute("PRAGMA journal_mode=WAL")
             conn.execute("PRAGMA busy_timeout=5000")
-            conn.executescript(SCHEMA_SQLITE.read_text(encoding="utf-8"))
+            for migration in MIGRATIONS_SQLITE:
+                conn.executescript(migration.read_text(encoding="utf-8"))
             return conn
 
         return cls(connect, SQLITE, **kw)
@@ -164,6 +187,41 @@ class SqlRuntimeStore:
         else:
             rows = self._query(STATEMENTS["list_runs_status"], (tenant_id, status, limit))
         return [RunState.model_validate_json(r[0]) for r in rows]
+
+    # ── ConversationStore ────────────────────────────────────────────────────
+    def create_conversation(self, tenant_id: str, subject: str) -> Conversation:
+        item = Conversation(
+            conversation_id=f"conv_{uuid.uuid4().hex[:16]}",
+            tenant_id=tenant_id,
+            created_by=subject,
+            created_at=self._clock(),
+        )
+        with self._tx() as cur:
+            cur.execute(
+                self._dialect.q(STATEMENTS["create_conversation"]),
+                (item.conversation_id, tenant_id, subject, item.created_at),
+            )
+        return item
+
+    def get_conversation(self, conversation_id: str, tenant_id: str) -> Conversation | None:
+        rows = self._query(STATEMENTS["get_conversation"], (conversation_id, tenant_id))
+        if not rows:
+            return None
+        runs = self._query(STATEMENTS["conversation_runs"], (conversation_id, tenant_id))
+        return Conversation(
+            conversation_id=rows[0][0],
+            tenant_id=rows[0][1],
+            created_by=rows[0][2],
+            created_at=rows[0][3],
+            run_ids=[r[0] for r in runs],
+        )
+
+    def add_conversation_run(self, conversation_id: str, run_id: str, tenant_id: str) -> None:
+        with self._tx() as cur:
+            cur.execute(
+                self._dialect.q(STATEMENTS["add_conversation_run"]),
+                (run_id, conversation_id, tenant_id, self._clock(), conversation_id, tenant_id),
+            )
 
     # ── ApprovalStore ────────────────────────────────────────────────────────
     async def consume(self, approval_id: str, expires_at: float) -> bool:

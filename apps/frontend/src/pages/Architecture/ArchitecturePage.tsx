@@ -17,7 +17,7 @@ export function ArchitecturePage() {
           System Overview
         </h2>
         <pre className="text-xs text-gray-400 font-mono leading-relaxed overflow-x-auto">
-{`graph TD
+          {`graph TD
   Developer --> CLI
   Developer --> Frontend
   CLI --> Backend
@@ -42,13 +42,15 @@ export function ArchitecturePage() {
           {
             title: 'Backend',
             tech: 'Spring Boot 3 · Java 21 · Maven',
-            description: 'Central control plane. Exposes REST APIs. Orchestrates agents. Enforces auth.',
+            description:
+              'Central control plane. Exposes REST APIs. Orchestrates agents. Enforces auth.',
             status: '🚧 Skeleton',
           },
           {
             title: 'Frontend',
             tech: 'React 18 · TypeScript · Vite · TailwindCSS',
-            description: 'Developer dashboard with chat, execution history, and architecture views.',
+            description:
+              'Developer dashboard with chat, execution history, and architecture views.',
             status: '🚧 Skeleton',
           },
           {
@@ -106,7 +108,8 @@ export function ArchitecturePage() {
             className="text-brand-400 hover:underline"
           >
             Architecture Decision Records
-          </a>.
+          </a>
+          .
         </p>
       </div>
     </div>

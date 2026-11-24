@@ -23,13 +23,24 @@ from ai.agent.contracts import (
     RunStatus,
     UIComponent,
 )
+from ai.agent.conversations import (
+    Conversation,
+    ConversationStore,
+    InMemoryConversationStore,
+    build_context,
+)
 from ai.agent.orchestrator import CheckpointStore, Orchestrator
+from ai.storage.sql_store import SqlRuntimeStore
 from skills.runtime.approval_service import ApprovalService
 from skills.runtime.contracts import Principal
 from skills.runtime.redaction import redact, redact_text
 
 
 class RunNotFoundError(LookupError):
+    pass
+
+
+class ConversationNotFoundError(RunNotFoundError):
     pass
 
 
@@ -64,6 +75,7 @@ class RunView(BaseModel):
     mode: str = "deterministic"
     ui: list[UIComponent] = Field(default_factory=list)
     model: ModelUsageTotals | None = None
+    conversation_id: str | None = None
 
     @classmethod
     def of(cls, state: RunState) -> RunView:
@@ -85,6 +97,7 @@ class RunView(BaseModel):
             mode=state.mode,
             ui=[c.model_copy(update={"props": redact(c.props)}) for c in state.ui],
             model=state.model_usage,
+            conversation_id=state.conversation_id,
         )
 
 
@@ -101,20 +114,96 @@ class RunService:
         orchestrator: Orchestrator,
         store: CheckpointStore,
         approvals: ApprovalService | None = None,
+        conversations: ConversationStore | None = None,
     ) -> None:
         self.orchestrator = orchestrator
         self.store = store
         self.approvals = approvals
+        # The SQL store doubles as the conversation store; otherwise keep them in memory.
+        self.conversations: ConversationStore = conversations or (
+            store if isinstance(store, SqlRuntimeStore) else InMemoryConversationStore()
+        )
         self._locks: dict[str, asyncio.Lock] = {}
 
     def _lock(self, run_id: str) -> asyncio.Lock:
         return self._locks.setdefault(run_id, asyncio.Lock())
 
-    async def start(self, principal: Principal, query: str, environment: str) -> RunState:
-        state = await self.orchestrator.run(query, principal=principal, environment=environment)
+    def create_conversation(self, principal: Principal) -> Conversation:
+        return self.conversations.create_conversation(principal.tenant_id, principal.subject)
+
+    def get_conversation(self, conversation_id: str, tenant_id: str) -> Conversation:
+        """Another tenant's conversation is indistinguishable from a missing one."""
+        conversation = self.conversations.get_conversation(conversation_id, tenant_id)
+        if conversation is None:
+            raise ConversationNotFoundError(conversation_id)
+        return conversation
+
+    def conversation_for(self, conversation_id: str, principal: Principal) -> Conversation:
+        """The caller's own conversation; anyone else's reads as missing.
+
+        Conversations are private to their creator, not just to the tenant: earlier turns
+        are fed to the model, and text typed in them grounds argument values, so another
+        user's turns must never reach (or ground) this caller's run.
+        """
+        conversation = self.get_conversation(conversation_id, principal.tenant_id)
+        if conversation.created_by != principal.subject:
+            raise ConversationNotFoundError(conversation_id)
+        return conversation
+
+    def conversation_runs(self, conversation: Conversation) -> list[RunState]:
+        states = []
+        for run_id in conversation.run_ids:
+            state = self.store.load(run_id)
+            if (
+                state is not None
+                and state.principal.tenant_id == conversation.tenant_id
+                and state.principal.subject == conversation.created_by
+            ):
+                states.append(state)
+        return states
+
+    async def start(
+        self,
+        principal: Principal,
+        query: str,
+        environment: str,
+        conversation_id: str | None = None,
+    ) -> RunState:
+        context = None
+        if conversation_id is not None:
+            conversation = self.conversation_for(conversation_id, principal)
+            previous = self.conversation_runs(conversation)
+            if previous and self.orchestrator.awaiting_clarification(previous[-1]):
+                # A plain next message while a run waits for an answer is that answer.
+                return await self.clarify(previous[-1].run_id, principal, query)
+            context = build_context(previous)
+        state = await self.orchestrator.run(
+            query,
+            principal=principal,
+            environment=environment,
+            conversation_id=conversation_id,
+            context=context,
+        )
         state.events.insert(0, RunEvent(kind="created", detail={"at": state.started_at}))
         self.store.save(state)
+        if conversation_id is not None:
+            self.conversations.add_conversation_run(
+                conversation_id, state.run_id, principal.tenant_id
+            )
         return state
+
+    async def clarify(self, run_id: str, principal: Principal, message: str) -> RunState:
+        async with self._lock(run_id):
+            state = self.get(run_id, principal.tenant_id)
+            if state.principal.subject != principal.subject:
+                # The answer grounds argument values and the run keeps the requester's
+                # permissions, so only the requester may give it (no confused deputy).
+                raise RunForbiddenError("only the user who started this run can answer it")
+            if not self.orchestrator.awaiting_clarification(state):
+                raise RunConflictError("run is not waiting for a clarification")
+            resumed = await self.orchestrator.clarify(run_id, message)
+            self.store.save(resumed)
+            return resumed
 
     def get(self, run_id: str, tenant_id: str) -> RunState:
         try:

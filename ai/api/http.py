@@ -19,7 +19,12 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 
 from ai.api.auth import AuthError, TokenAuthority, bearer
-from ai.api.runs import RunConflictError, RunForbiddenError, RunNotFoundError
+from ai.api.runs import (
+    ConversationNotFoundError,
+    RunConflictError,
+    RunForbiddenError,
+    RunNotFoundError,
+)
 from ai.telemetry import parse_traceparent, trace_scope
 from skills.runtime.contracts import Principal
 
@@ -93,6 +98,8 @@ def endpoint(
             response = await handler(request, principal)
         except ApiProblemError as exc:
             return error(request, rid, exc.status, exc.code, exc.message)
+        except ConversationNotFoundError:
+            return error(request, rid, 404, "RESOURCE_NOT_FOUND", "conversation not found")
         except RunNotFoundError:
             return error(request, rid, 404, "RESOURCE_NOT_FOUND", "run not found")
         except RunConflictError as exc:

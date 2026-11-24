@@ -110,4 +110,13 @@ type Run struct {
 	ToolCalls       int              `json:"tool_calls"`
 	PendingApproval *PendingApproval `json:"pending_approval"`
 	Timeline        []TimelineEvent  `json:"timeline"`
+	ConversationID  *string          `json:"conversation_id"`
+}
+
+// Conversation mirrors the Conversation schema.
+type Conversation struct {
+	ConversationID string `json:"conversation_id"`
+	CreatedAt      string `json:"created_at"`
+	CreatedBy      string `json:"created_by,omitempty"`
+	Runs           []Run  `json:"runs"`
 }
