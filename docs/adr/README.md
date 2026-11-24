@@ -12,6 +12,7 @@
 | [ADR-0008](ADR-0008.md) | Offline-First, Deterministic-First Evaluation | Accepted |
 | [ADR-0009](ADR-0009.md) | Contract-First Platform API with a Local Reference Implementation; Standard-Library CLI | Accepted |
 | [ADR-0010](ADR-0010.md) | Durable Runtime State via Portable SQL (SQLite Now, PostgreSQL Twin) | Accepted |
+| [ADR-0011](ADR-0011.md) | LLM-driven agent with code-enforced guardrails | Accepted |
 
 Each ADR records context, decision, alternatives, trade-offs and consequences. To change a
 decision, add a new ADR that supersedes the old one; do not rewrite history.

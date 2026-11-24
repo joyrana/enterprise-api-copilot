@@ -373,10 +373,38 @@ class Orchestrator:
                 f"The language model ({model}) returned output I couldn't use while "
                 f"{_STAGE_NAMES.get(stage, stage)}. Please try again."
             )
+        if self._side_effect_executed(state):
+            # G9: the write already happened, so reporting FAILED would invite a retry
+            # (a duplicate action). End COMPLETED and say the summary is what is missing.
+            if stage == "plan":
+                self._compose(state)  # the server's own account of what ran
+            state.events.append(
+                RunEvent(kind="summary_unavailable", detail={"stage": stage, "error": error})
+            )
+            draft = state.message.strip()
+            raise RunHaltError(
+                RunStatus.COMPLETED,
+                "The action succeeded, but the summary could not be generated because the "
+                f"language model ({model}) failed while {_STAGE_NAMES.get(stage, stage)}."
+                + (f"\n\n{draft}" if draft else ""),
+            )
         done = sum(1 for r in state.results.values() if r.ok)
         if done:
             message += f" {done} step(s) had already run; their results are shown below."
         raise RunHaltError(RunStatus.FAILED, message)
+
+    def _side_effect_executed(self, state: RunState) -> bool:
+        """True when a WRITE/DESTRUCTIVE skill already succeeded in this run."""
+        for result in state.results.values():
+            descriptor = self.runtime.registry.get(result.skill_id)
+            if (
+                result.ok
+                and descriptor is not None
+                and descriptor.side_effect.requires_approval
+                and (result.output or {}).get("ok", True)  # an upstream 4xx changed nothing
+            ):
+                return True
+        return False
 
     def _account_classifier(self, state: RunState) -> None:
         """Record intent-model usage and entities the grounding check dropped."""
@@ -568,6 +596,7 @@ class Orchestrator:
             self.responder is not None
             and state.mode == "agentic"
             and state.status is RunStatus.COMPLETED
+            and not any(e.kind == "summary_unavailable" for e in state.events)
         ):
             try:
                 message, choices = await self.responder.respond(state)

@@ -33,7 +33,19 @@ _PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
     ("github_token", re.compile(r"\b(gh[pousr]_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{40,})\b")),
     ("provider_key", re.compile(r"\b(sk|rk|pk)-(live|test|proj|ant)?[-_]?[A-Za-z0-9_-]{16,}\b")),
     ("basic_auth_url", re.compile(r"(?<=://)[^/\s:@]+:[^/\s@]+(?=@)")),
+    # ``client_secret=abc123``, ``"password": "hunter2xx"``: a secret-named key assigned a
+    # value inside free text (key-based redaction only sees structured data).
+    (
+        "secret_assignment",
+        re.compile(
+            r"""(?ix)\b(?:client[-_]?secret|api[-_]?key|apikey|secret|password|passwd|
+            access[-_]?token|refresh[-_]?token|auth[-_]?token|private[-_]?key)["']?\s*[:=]\s*
+            ["']?[^\s"',;&]{6,}"""
+        ),
+    ),
 )
+
+_JWT = re.compile(r"\beyJ[A-Za-z0-9_-]{5,}\.[A-Za-z0-9_-]{5,}\.[A-Za-z0-9_-]*")
 
 
 def is_secret_key(key: str) -> bool:
@@ -44,6 +56,11 @@ def redact_text(text: str) -> str:
     for _name, pattern in _PATTERNS:
         text = pattern.sub(REDACTED, text)
     return text
+
+
+def mask_jwts(text: str, placeholder: str = "<JWT>") -> str:
+    """``text`` with JWTs replaced by ``placeholder`` (keeps the fact that one was present)."""
+    return _JWT.sub(placeholder, text)
 
 
 def contains_secret(text: str) -> bool:
