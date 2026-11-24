@@ -2,18 +2,17 @@
  "case": "l-011",
  "provider": "mlx",
  "model": "mlx-community/Qwen3-4B-Instruct-2507-4bit",
- "recorded_at": "2026-11-24T03:48:06.772596+00:00",
+ "recorded_at": "2026-11-24T04:01:37.859636+00:00",
  "prompt_versions": [
   "intent=intent-v3",
-  "plan=planner-v3",
+  "plan=planner-v4",
   "respond=responder-v2"
  ],
- "latency_ms": 15366.0,
+ "latency_ms": 12830.6,
  "outputs": [
   "{\n  \"intent\": \"docs_question\",\n  \"confidence\": 0.99,\n  \"rationale\": \"The request asks about a policy or limit stated in documentation.\",\n  \"entities\": {\n    \"payment_id\": null,\n    \"customer_id\": null,\n    \"order_id\": null,\n    \"amount_minor\": null,\n    \"currency\": null,\n    \"status_codes\": [],\n    \"languages\": [],\n    \"status_filter\": null,\n    \"refund_reason\": null,\n    \"operation_hint\": null\n  }\n}",
-  "{\"thought\": \"Find relevant API operations to query minimum payment amount\", \"action\": \"call\", \"skill_id\": \"api.search\", \"arguments\": {\"query\": \"minimum payment amount\", \"limit\": 5}}",
-  "{\"thought\": \"Search for documentation on minimum payment amount\", \"action\": \"call\", \"skill_id\": \"docs.search\", \"arguments\": {\"query\": \"minimum payment amount\", \"k\": 5}}",
-  "{\"thought\": \"The minimum payment amount is explicitly stated in the documentation.\", \"action\": \"finish\"}",
-  "{\n  \"message\": \"The minimum payment amount is 100 (equivalent to ₹1.00 or $1.00). This applies to all supported currencies: INR, USD, and EUR. Amounts are integers in the smallest currency unit (paise for INR, cents for USD/EUR).\",\n  \"components\": [\n    {\n      \"component\": \"doc_sources\",\n      \"source\": \"1\"\n    },\n    {\n      \"component\": \"doc_sources\",\n      \"source\": \"2\"\n    }\n  ]\n}"
+  "{\"thought\": \"Determine the minimum payment amount from documentation.\", \"action\": \"call\", \"skill_id\": \"docs.search\", \"arguments\": {\"query\": \"minimum payment amount\", \"k\": 5}}",
+  "{\"thought\": \"Minimum payment amount is documented in the payments guide.\", \"action\": \"finish\", \"skill_id\": \"\", \"arguments\": {}}",
+  "{\"message\":\"The minimum payment amount is 100 (in the smallest currency unit: paise for INR, cents for USD/EUR). This applies to all supported currencies (INR, USD, EUR). An amount below 100 will result in a 422 Unprocessable Entity error. [1][2]\",\"components\":[{\"component\":\"doc_sources\",\"source\":\"1\"},{\"component\":\"doc_sources\",\"source\":\"2\"}]}"
  ]
 }

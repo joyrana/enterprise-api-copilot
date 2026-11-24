@@ -2,18 +2,18 @@
  "case": "l-005",
  "provider": "mlx",
  "model": "mlx-community/Qwen3-4B-Instruct-2507-4bit",
- "recorded_at": "2026-11-24T03:44:07.883407+00:00",
+ "recorded_at": "2026-11-24T03:59:46.139736+00:00",
  "prompt_versions": [
   "intent=intent-v3",
-  "plan=planner-v3",
+  "plan=planner-v4",
   "respond=responder-v2"
  ],
- "latency_ms": 16118.1,
+ "latency_ms": 14507.5,
  "outputs": [
   "{\n  \"intent\": \"api_explanation\",\n  \"confidence\": 0.99,\n  \"rationale\": \"The request asks for details on scopes and required fields for the createPayment operation.\",\n  \"entities\": {\n    \"operation_hint\": \"createPayment\"\n  }\n}",
   "{\"thought\": \"Find the createPayment operation to retrieve its scopes and fields\", \"action\": \"call\", \"skill_id\": \"api.search\", \"arguments\": {\"query\": \"createPayment\"}}",
-  "{\"thought\": \"Find details on createPayment operation scopes and fields\", \"action\": \"call\", \"skill_id\": \"api.describe\", \"arguments\": {\"operation_id\": \"createPayment\"}}",
+  "{\"thought\": \"Find details on createPayment operation's scopes and fields\", \"action\": \"call\", \"skill_id\": \"api.describe\", \"arguments\": {\"operation_id\": \"createPayment\"}}",
   "{\"thought\": \"Retrieved createPayment operation details for scopes and required fields\", \"action\": \"finish\", \"skill_id\": \"\", \"arguments\": {}}",
-  "{\n  \"message\": \"The `createPayment` operation requires the `payments:write` scope for authentication. The request body must include the following fields: `amount` (in smallest currency unit, e.g., paise for INR), `currency` (one of INR, USD, EUR), and `customer_id`. An `Idempotency-Key` header is required to ensure idempotency; retries with the same key return the original payment. Valid responses include 201 (Payment created), 401 (invalid token), 403 (missing scope), 409 (reused idempotency key), 422 (validation error), and 429 (rate limit exceeded).\",\n  \"components\": [\n    {\n      \"component\": \"operation_detail\",\n      \"source\": \"describe\"\n    }\n  ]\n}"
+  "{\n  \"message\": \"The `createPayment` operation requires the `payments:write` scope for authentication. The request body must include the following fields: `amount` (in smallest currency unit, e.g., paise for INR), `currency` (one of INR, USD, EUR), and `customer_id`. An `Idempotency-Key` header is required to ensure idempotency; retries with the same key return the original payment.\",\n  \"components\": [\n    {\n      \"component\": \"operation_detail\",\n      \"source\": \"describe\"\n    }\n  ]\n}"
  ]
 }

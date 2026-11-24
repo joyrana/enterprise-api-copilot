@@ -2,16 +2,16 @@
  "case": "l-021",
  "provider": "mlx",
  "model": "mlx-community/Qwen3-4B-Instruct-2507-4bit",
- "recorded_at": "2026-11-24T03:51:24.429177+00:00",
+ "recorded_at": "2026-11-24T04:05:14.829416+00:00",
  "prompt_versions": [
   "intent=intent-v3",
-  "plan=planner-v3"
+  "plan=planner-v4"
  ],
- "latency_ms": 13363.7,
+ "latency_ms": 15896.4,
  "outputs": [
   "{\n  \"intent\": \"api_execution\",\n  \"confidence\": 0.99,\n  \"rationale\": \"The request explicitly asks to create a payment for a specific customer with a given amount and currency.\",\n  \"entities\": {\n    \"amount_minor\": 50000,\n    \"customer_id\": \"cust_acm0001\",\n    \"operation_hint\": \"create a sandbox payment\"\n  }\n}",
-  "{\"thought\": \"Find operation to create a sandbox payment\", \"action\": \"call\", \"skill_id\": \"api.search\", \"arguments\": {\"query\": \"create sandbox payment\", \"limit\": 5}}",
+  "{\"thought\": \"Find the payment creation operation for sandbox.\", \"action\": \"call\", \"skill_id\": \"api.search\", \"arguments\": {\"query\": \"create sandbox payment\", \"limit\": 5}}",
   "{\"thought\": \"Find details of the createPayment operation to understand required parameters.\", \"action\": \"call\", \"skill_id\": \"api.describe\", \"arguments\": {\"operation_id\": \"createPayment\"}}",
-  "{\"thought\": \"Prepare to create a payment with specified amount and customer ID.\", \"action\": \"call\", \"skill_id\": \"api.call.write\", \"arguments\": {\"operation_id\": \"createPayment\", \"path_params\": {}, \"query\": {}, \"body\": {\"amount\": 50000, \"currency\": \"INR\", \"customer_id\": \"cust_acm0001\", \"description\": \"Sandbox payment for testing\"}}}"
+  "{\"thought\": \"Prepare to create a payment with specified details.\", \"action\": \"call\", \"skill_id\": \"api.call.write\", \"arguments\": {\"operation_id\": \"createPayment\", \"path_params\": {}, \"query\": {}, \"body\": {\"amount\": 50000, \"currency\": \"INR\", \"customer_id\": \"cust_acm0001\", \"description\": \"Sandbox payment for testing\"}}}"
  ]
 }

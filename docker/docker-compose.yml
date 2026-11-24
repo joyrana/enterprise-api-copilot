@@ -31,25 +31,6 @@ services:
       retries: 5
     restart: unless-stopped
 
-  # Kept only because the current backend build includes spring-boot-starter-data-redis;
-  # ADR-0007 removes it once the backend migration (Phase 3) drops that dependency.
-  redis:
-    image: redis:7-alpine
-    container_name: copilot-redis
-    command: ["redis-server", "--requirepass", "${REDIS_PASSWORD:-dev-only-redis-password}"]
-    ports:
-      - "127.0.0.1:6379:6379"
-    environment:
-      REDIS_PASSWORD: ${REDIS_PASSWORD:-dev-only-redis-password}
-    volumes:
-      - redis-data:/data
-    healthcheck:
-      test: ["CMD-SHELL", "redis-cli -a \"$$REDIS_PASSWORD\" ping | grep PONG"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    restart: unless-stopped
-
   # ─── Backend ─────────────────────────────────────────────────────────────
 
   backend:
@@ -59,7 +40,7 @@ services:
     container_name: copilot-backend
     image: api-copilot/backend:local
     ports:
-      - "127.0.0.1:8080:8080"
+      - "127.0.0.1:8080:8081"
     environment:
       APP_ENV: local
       POSTGRES_HOST: postgres
@@ -67,18 +48,17 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-api_copilot}
       POSTGRES_USER: ${POSTGRES_USER:-api_copilot}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-dev-only-postgres-password}
-      REDIS_HOST: redis
-      REDIS_PORT: 6379
-      REDIS_PASSWORD: ${REDIS_PASSWORD:-dev-only-redis-password}
-      # The agent service HTTP adapter is not built yet (Phase 4); see docs/implementation/STATUS.md.
-      AGENT_SERVICE_URL: http://agent-service:8001
+      COPILOT_AGENT_URL: http://agent-service:8001
+      # Shared with the agent service: service tokens and approval tokens.
+      COPILOT_PLATFORM_TOKEN_KEY: ${COPILOT_PLATFORM_TOKEN_KEY:?set in .env}
+      COPILOT_SERVICE_TOKEN_KEY: ${COPILOT_SERVICE_TOKEN_KEY:?set in .env}
+      COPILOT_APPROVAL_KEY: ${COPILOT_APPROVAL_KEY:?set in .env}
+      COPILOT_DEV_TOKEN_ENABLED: "true"
     depends_on:
       postgres:
         condition: service_healthy
-      redis:
-        condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:8080/api/v1/health || exit 1"]
+      test: ["CMD-SHELL", "curl -f http://localhost:8081/api/v1/health || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -134,7 +114,6 @@ services:
 
 volumes:
   postgres-data:
-  redis-data:
   prometheus-data:
   grafana-data:
 

@@ -2,19 +2,19 @@
  "case": "l-008",
  "provider": "mlx",
  "model": "mlx-community/Qwen3-4B-Instruct-2507-4bit",
- "recorded_at": "2026-11-24T03:47:06.439349+00:00",
+ "recorded_at": "2026-11-24T04:00:35.345870+00:00",
  "prompt_versions": [
   "intent=intent-v3",
-  "plan=planner-v3",
+  "plan=planner-v4",
   "respond=responder-v2"
  ],
- "latency_ms": 20301.1,
+ "latency_ms": 18275.7,
  "outputs": [
   "{\n  \"intent\": \"code_generation\",\n  \"confidence\": 1,\n  \"rationale\": \"The request asks for a Python example to list orders.\",\n  \"entities\": {\n    \"payment_id\": null,\n    \"customer_id\": null,\n    \"order_id\": null,\n    \"amount_minor\": null,\n    \"currency\": null,\n    \"status_codes\": [],\n    \"languages\": [\n    \"python\"\n  ],\n    \"status_filter\": null,\n    \"refund_reason\": null,\n    \"operation_hint\": \"list orders\"\n  }\n}",
   "{\"thought\": \"Find the operation to list orders\", \"action\": \"call\", \"skill_id\": \"api.search\", \"arguments\": {\"query\": \"list orders\"}}",
   "{\"thought\": \"Find Python code example for listing orders\", \"action\": \"call\", \"skill_id\": \"code.generate\", \"arguments\": {\"operation_id\": \"listOrders\", \"languages\": [\"python\"]}}",
   "{\"thought\": \"Generate Python code to list orders\", \"action\": \"call\", \"skill_id\": \"code.generate\", \"arguments\": {\"operation_id\": \"listOrders\", \"languages\": [\"python\"]}}",
   "{\"thought\": \"Python example for listing orders is available from previous codegen step.\", \"action\": \"finish\"}",
-  "{\"message\":\"Python example to list orders using the `listOrders` API operation.\\n\\n```python\\nimport os\\nimport httpx\\n\\n# Set COPILOT_TOKEN to an OAuth access token with scope: orders:read\\nheaders = {\\n    \\\"Authorization\\\": f\\\"Bearer {os.environ['COPILOT_TOKEN']}\\\",\\n    \\\"Accept\\\": \\\"application/json\\\"\\n}\\n\\nresponse = httpx.get(\\n    \\\"http://sandbox.local/v2/orders\\\",\\n    headers=headers,\\n    timeout=30,\\n)\\n\\nprint(response.status_code, response.text)\\n```\\n\\n> **Note**: Replace `COPILOT_TOKEN` with a valid OAuth token having `orders:read` scope. The API returns a list of orders in JSON format.\\n\\n- Operation: `listOrders` (GET /v2/orders)\\n- Required scope: `orders:read`\",\"components\":[{\"component\":\"code_snippets\",\"source\":\"codegen\"},{\"component\":\"operation_detail\",\"source\":\"search\"}]}"
+  "{\"message\":\"Python example to list orders using the `listOrders` API operation.\\n\\n```python\\nimport os\\nimport httpx\\n\\n# Set COPILOT_TOKEN to an OAuth access token with scopes: orders:read\\nheaders = {\\n    \\\"Authorization\\\": f\\\"Bearer {os.environ['COPILOT_TOKEN']}\\\",\\n    \\\"Accept\\\": \\\"application/json\\\"\\n}\\n\\nresponse = httpx.get(\\n    \\\"http://sandbox.local/v2/orders\\\",\\n    headers=headers,\\n    timeout=30,\\n)\\n\\nprint(response.status_code, response.text)\\n```\\n\\nEnsure the token has `orders:read` scope to access order data. The API returns a list of orders in JSON format.\", \"components\":[{\"component\":\"code_snippets\",\"source\":\"codegen\"}]}"
  ]
 }

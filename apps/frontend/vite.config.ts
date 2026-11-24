@@ -14,7 +14,8 @@ export default defineConfig({
     port: 3000,
     proxy: {
       '/api': {
-        target: 'http://localhost:8080',
+        // 8080: Python reference facade; ./dev.sh --with-backend sets VITE_API_PROXY to Spring (8081).
+        target: process.env.VITE_API_PROXY ?? 'http://localhost:8080',
         changeOrigin: true,
       },
     },

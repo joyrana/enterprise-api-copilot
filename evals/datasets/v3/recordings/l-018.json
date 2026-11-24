@@ -2,13 +2,13 @@
  "case": "l-018",
  "provider": "mlx",
  "model": "mlx-community/Qwen3-4B-Instruct-2507-4bit",
- "recorded_at": "2026-11-24T03:50:23.944539+00:00",
+ "recorded_at": "2026-11-24T04:04:01.812263+00:00",
  "prompt_versions": [
   "intent=intent-v3",
-  "plan=planner-v3",
+  "plan=planner-v4",
   "respond=responder-v2"
  ],
- "latency_ms": 21795.5,
+ "latency_ms": 26803.2,
  "outputs": [
   "{\n  \"intent\": \"api_execution\",\n  \"confidence\": 0.99,\n  \"rationale\": \"The request asks to list captured payments, which is an action to be performed on the payments API.\",\n  \"entities\": {\n    \"operation_hint\": \"captured payments\",\n    \"status_filter\": \"captured\"\n  }\n}",
   "{\"thought\": \"Find operation for captured payments\", \"action\": \"call\", \"skill_id\": \"api.search\", \"arguments\": {\"query\": \"captured payments\", \"limit\": 5}}",
@@ -16,6 +16,6 @@
   "{\"thought\": \"Find details of the listPayments operation to retrieve captured payments\", \"action\": \"call\", \"skill_id\": \"api.describe\", \"arguments\": {\"operation_id\": \"listPayments\"}}",
   "{\"thought\": \"List captured payments with status filter applied\", \"action\": \"call\", \"skill_id\": \"api.call.read\", \"arguments\": {\"operation_id\": \"listPayments\", \"query\": {\"status\": \"captured\"}}}",
   "{\"thought\": \"Found captured payments in the latest call; no further action needed.\", \"action\": \"finish\"}",
-  "{\n  \"message\": \"One captured payment found:\\n- ID: pay_acm00000002\\n- Amount: ₹1,250.00 (INR)\\n- Customer: cust_acm0002\\n- Status: captured\",\n  \"components\": [\n    {\n      \"component\": \"api_response\",\n      \"source\": \"call\"\n    }\n  ]\n}"
+  "{\n  \"message\": \"One captured payment found: ID `pay_acm00000002` for ₹1,250.00 (INR).\",\n  \"components\": [\n    {\n      \"component\": \"api_response\",\n      \"source\": \"call\"\n    },\n    {\n      \"component\": \"code_snippets\",\n      \"source\": \"search\"\n    }\n  ]\n}"
  ]
 }

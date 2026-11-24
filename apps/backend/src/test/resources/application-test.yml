@@ -1,12 +1,20 @@
 spring:
   datasource:
-    url: jdbc:postgresql://localhost:5432/api_copilot_test
-    username: api_copilot
-    password: changeme
+    url: jdbc:h2:mem:copilot;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DEFAULT_NULL_ORDERING=HIGH;DB_CLOSE_DELAY=-1
+    username: sa
+    password: ""
   flyway:
     enabled: true
-  jpa:
-    show-sql: false
+
+copilot:
+  auth:
+    token-key: test-only-platform-token-key-0123456789abcdef
+    dev-token-enabled: true
+  agent:
+    base-url: http://127.0.0.1:1
+    service-key: test-only-service-token-key-0123456789abcdef
+  approval:
+    key: test-only-approval-key-0123456789abcdef0123
 
 logging:
   level:

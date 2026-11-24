@@ -308,9 +308,12 @@ class Orchestrator:
         return known.principal.tenant_id if known else "-"
 
     def _record_model_calls(self, state: RunState, calls: list[dict[str, Any]]) -> RunState:
-        if calls:
-            state.events.extend(RunEvent(kind="model_call", detail=c) for c in calls)
-            self.checkpoints.save(state)
+        state.events.extend(RunEvent(kind="model_call", detail=c) for c in calls)
+        # Last event of every segment (run, resume, clarify). A status is only final for a
+        # follower of the event stream once this marker follows it: the reply and UI are
+        # still being written when the status first turns COMPLETED.
+        state.events.append(RunEvent(kind="settled", detail={"status": state.status.value}))
+        self.checkpoints.save(state)
         return state
 
     async def _run(

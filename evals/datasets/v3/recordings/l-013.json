@@ -2,17 +2,17 @@
  "case": "l-013",
  "provider": "mlx",
  "model": "mlx-community/Qwen3-4B-Instruct-2507-4bit",
- "recorded_at": "2026-11-24T03:48:50.587119+00:00",
+ "recorded_at": "2026-11-24T04:02:22.036617+00:00",
  "prompt_versions": [
   "intent=intent-v3",
-  "plan=planner-v3",
+  "plan=planner-v4",
   "respond=responder-v2"
  ],
- "latency_ms": 13061.0,
+ "latency_ms": 13363.6,
  "outputs": [
   "{\n  \"intent\": \"docs_question\",\n  \"confidence\": 0.98,\n  \"rationale\": \"The request asks about rate limits and handling 429 errors, which are documentation-related questions.\",\n  \"entities\": {\n    \"status_codes\": [\n      429\n    ],\n    \"languages\": [\n      \"en\"\n    ]\n  }\n}",
-  "{\"thought\": \"Find documentation on rate limits and 429 errors\", \"action\": \"call\", \"skill_id\": \"docs.search\", \"arguments\": {\"query\": \"rate limits and 429 error handling\", \"k\": 5, \"mode\": \"hybrid\"}}",
-  "{\"thought\": \"Rate limits and 429 handling are covered in the docs search results.\", \"action\": \"finish\"}",
-  "{\"message\":\"In the sandbox, the gateway enforces a rate limit of 60 requests per minute per client application. On a 429 Too Many Requests error, use exponential backoff and wait for the Retry-After header (in seconds) before retrying. Do not retry immediately. The X-Correlation-Id header is available in all responses and should be quoted when contacting support.\\n\\nRate limit: 60 requests per minute per client application.\\n429 handling: Exponential backoff with Retry-After header; do not retry immediately.\\n\\nSource: docs.search(429)\", \"components\":[{\"component\":\"doc_sources\",\"source\":\"1\"},{\"component\":\"doc_sources\",\"source\":\"2\"}]}"
+  "{\"thought\": \"Determine rate limits and 429 handling from documentation.\", \"action\": \"call\", \"skill_id\": \"docs.search\", \"arguments\": {\"query\": \"rate limits and what to do on a 429\", \"k\": 5, \"mode\": \"hybrid\", \"token_budget\": 1200}}",
+  "{\"thought\": \"The observations already contain information about rate limits and actions for a 429 error.\", \"action\": \"finish\"}",
+  "{\"message\": \"In the sandbox environment, the rate limit is 60 requests per minute per client application. On receiving a 429 Too Many Requests response, you should wait for the number of seconds specified in the Retry-After header and use exponential backoff before retrying. Do not retry immediately.\", \"components\": [{\"component\": \"doc_sources\", \"source\": \"1\"}, {\"component\": \"doc_sources\", \"source\": \"3\"}]}"
  ]
 }

@@ -10,7 +10,9 @@ orchestrator fails the run.
 
 from __future__ import annotations
 
-from pydantic import BaseModel, Field
+from typing import Any
+
+from pydantic import BaseModel, Field, ValidationInfo, field_validator
 
 from ai.agent.contracts import Entities, Intent, IntentResult
 from ai.agent.conversations import ConversationContext, render_history
@@ -53,7 +55,24 @@ latest request. \
 Keep rationale to one short sentence."""
 
 
+_NULL_WORDS = {"", "null", "none", "n/a", "nil"}
+_LIST_FIELDS = {"status_codes", "languages"}
+
+
 class _LLMEntities(BaseModel):
+    """What the model says it found. Small models write ``"null"`` or ``null`` for empty lists;
+    reading those as empty costs nothing because every value is grounded against the request
+    afterwards (``ai.agent.grounding``), so tolerance here cannot admit an invented value."""
+
+    @field_validator("*", mode="before")
+    @classmethod
+    def _empty_is_none(cls, value: Any, info: ValidationInfo) -> Any:
+        if isinstance(value, str) and value.strip().lower() in _NULL_WORDS:
+            value = None
+        if value is None and info.field_name in _LIST_FIELDS:
+            return []
+        return value
+
     payment_id: str | None = None
     customer_id: str | None = None
     order_id: str | None = None

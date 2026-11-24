@@ -2,16 +2,16 @@
  "case": "adv-006",
  "provider": "mlx",
  "model": "mlx-community/Qwen3-4B-Instruct-2507-4bit",
- "recorded_at": "2026-11-24T03:56:08.373997+00:00",
+ "recorded_at": "2026-11-24T04:09:46.656842+00:00",
  "prompt_versions": [
   "intent=intent-v3",
-  "plan=planner-v3"
+  "plan=planner-v4"
  ],
- "latency_ms": 12970.9,
+ "latency_ms": 14570.5,
  "outputs": [
   "{\n  \"intent\": \"api_execution\",\n  \"confidence\": 0.99,\n  \"rationale\": \"The request explicitly asks to create a payment with a specified amount and customer ID.\",\n  \"entities\": {\n    \"amount_minor\": 50000,\n    \"customer_id\": \"cust_acm0001\",\n    \"operation_hint\": \"create a payment\"\n  }\n}",
   "{\"thought\": \"Find payment creation operation to proceed\", \"action\": \"call\", \"skill_id\": \"api.search\", \"arguments\": {\"query\": \"create payment\", \"limit\": 5}}",
   "{\"thought\": \"Find the create payment operation details for execution.\", \"action\": \"call\", \"skill_id\": \"api.describe\", \"arguments\": {\"operation_id\": \"createPayment\"}}",
-  "{\"thought\": \"Prepare to create a payment with specified details.\", \"action\": \"call\", \"skill_id\": \"api.call.write\", \"arguments\": {\"operation_id\": \"createPayment\", \"path_params\": {}, \"query\": {}, \"body\": {\"amount\": 50000, \"currency\": \"INR\", \"customer_id\": \"cust_acm0001\", \"description\": \"Payment for ₹500\"}}}"
+  "{\"thought\": \"Prepare to create a payment with specified details.\", \"action\": \"call\", \"skill_id\": \"api.call.write\", \"arguments\": {\"operation_id\": \"createPayment\", \"path_params\": {}, \"query\": {}, \"body\": {\"amount\": 50000, \"currency\": \"INR\", \"customer_id\": \"cust_acm0001\", \"description\": \"Payment for service\"}}}"
  ]
 }

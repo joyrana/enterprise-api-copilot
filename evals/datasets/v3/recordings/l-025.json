@@ -2,11 +2,11 @@
  "case": "l-025",
  "provider": "mlx",
  "model": "mlx-community/Qwen3-4B-Instruct-2507-4bit",
- "recorded_at": "2026-11-24T03:52:50.391042+00:00",
+ "recorded_at": "2026-11-24T04:06:52.287102+00:00",
  "prompt_versions": [
   "intent=intent-v3"
  ],
- "latency_ms": 3512.9,
+ "latency_ms": 4272.6,
  "outputs": [
   "{\n  \"intent\": \"clarification_needed\",\n  \"confidence\": 1.0,\n  \"rationale\": \"A single word 'payments' lacks specific context or action to classify into a concrete intent.\",\n  \"entities\": {\n    \"payment_id\": null,\n    \"customer_id\": null,\n    \"order_id\": null,\n    \"amount_minor\": null,\n    \"currency\": null,\n    \"status_codes\": [],\n    \"languages\": [],\n    \"status_filter\": null,\n    \"refund_reason\": null,\n    \"operation_hint\": null\n  }\n}"
  ]

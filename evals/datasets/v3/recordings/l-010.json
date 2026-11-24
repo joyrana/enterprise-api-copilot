@@ -2,20 +2,21 @@
  "case": "l-010",
  "provider": "mlx",
  "model": "mlx-community/Qwen3-4B-Instruct-2507-4bit",
- "recorded_at": "2026-11-24T03:47:51.346577+00:00",
+ "recorded_at": "2026-11-24T04:01:24.819862+00:00",
  "prompt_versions": [
   "intent=intent-v3",
-  "plan=planner-v3",
+  "plan=planner-v4",
   "respond=responder-v2"
  ],
- "latency_ms": 22188.1,
+ "latency_ms": 24955.3,
  "outputs": [
   "{\n  \"intent\": \"code_generation\",\n  \"confidence\": 0.99,\n  \"rationale\": \"The request asks for a JavaScript snippet to get a shipment tracking status, indicating a code example for an API operation.\",\n  \"entities\": {\n    \"operation_hint\": \"get shipment tracking status\",\n    \"payment_id\": null,\n    \"customer_id\": null,\n    \"order_id\": null,\n    \"amount_minor\": null,\n    \"currency\": null,\n    \"status_codes\": [],\n    \"languages\": [\n    \"javascript\"\n  ],\n    \"status_filter\": null,\n    \"refund_reason\": null\n  }\n}",
   "{\"thought\": \"Find operation for shipment tracking status\", \"action\": \"call\", \"skill_id\": \"api.search\", \"arguments\": {\"query\": \"get shipment tracking status\"}}",
   "{\"thought\": \"Find JavaScript snippet for shipment tracking status\", \"action\": \"call\", \"skill_id\": \"code.generate\", \"arguments\": {\"operation_id\": \"getShipmentTracking\", \"languages\": [\"javascript\"]}}",
   "{\"thought\": \"Generate JavaScript snippet for shipment tracking status\", \"action\": \"call\", \"skill_id\": \"code.generate\", \"arguments\": {\"operation_id\": \"getShipmentTracking\", \"languages\": [\"javascript\"]}}",
   "{\"thought\": \"Ready to generate JavaScript snippet for shipment tracking.\", \"action\": \"call\", \"skill_id\": \"code.generate\", \"arguments\": {\"operation_id\": \"getShipmentTracking\", \"languages\": [\"javascript\"]}}",
-  "{\"thought\": \"Ready to generate JavaScript snippet for shipment tracking\", \"action\": \"call\", \"skill_id\": \"code.generate\", \"arguments\": {\"operation_id\": \"getShipmentTracking\", \"languages\": [\"javascript\"]}}",
-  "{\"message\":\"JavaScript snippet to fetch shipment tracking status for an order.\\n\\n```javascript\\nconst response = await fetch(\\\"http://sandbox.local/v2/orders/<order_id>/shipment\\\", {\\n  method: \\\"GET\\\",\\n  headers: {\\n    \\\"Authorization\\\": `Bearer ${process.env.COPILOT_TOKEN}`,\\n    \\\"Accept\\\": \\\"application/json\\\"\\n  },\\n});\\nconsole.log(response.status, await response.text());\\n```\\n\\n> Set `COPILOT_TOKEN` to an OAuth access token with scope `orders:read`.\\n> Replace `<order_id>` with the actual order ID.\\n> Ensure the API endpoint is accessible in the sandbox environment.\\n\\n- Operation: `getShipmentTracking` (GET /v2/orders/{order_id}/shipment)\\n- Required scope: `orders:read`\",\"components\":[{\"component\":\"code_snippets\",\"source\":\"codegen\"}]}"
+  "{\"thought\": \"Ready to generate JavaScript snippet for shipment tracking.\", \"action\": \"call\", \"skill_id\": \"api.describe\", \"arguments\": {\"operation_id\": \"getShipmentTracking\"}}",
+  "{\"thought\": \"Ready to generate JavaScript snippet for shipment tracking.\", \"action\": \"call\", \"skill_id\": \"code.generate\", \"arguments\": {\"operation_id\": \"getShipmentTracking\", \"languages\": [\"javascript\"]}}",
+  "{\n  \"message\": \"JavaScript snippet to get shipment tracking status using the `getShipmentTracking` operation.\",\n  \"components\": [\n    {\n      \"component\": \"code_snippets\",\n      \"source\": \"codegen\"\n    },\n    {\n      \"component\": \"operation_detail\",\n      \"source\": \"describe\"\n    }\n  ]\n}"
  ]
 }

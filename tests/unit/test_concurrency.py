@@ -174,6 +174,8 @@ async def test_async_run_is_visible_while_running_and_streams_its_events() -> No
     ]
     assert names[0] == "created" and "intent" in names and "tool_call" in names
     assert names[-1] == "status"
+    # The stream must not close before the reply and UI exist (status turns COMPLETED earlier).
+    assert names.index("ui") < names.index("settled") < names.index("status")
     final = json.loads(frames[-1].split("data: ", 1)[1])
     assert final["status"] == "COMPLETED" and final["run_id"] == started.run_id
 

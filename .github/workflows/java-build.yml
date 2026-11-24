@@ -5,11 +5,15 @@ on:
     branches: [main]
     paths:
       - 'apps/backend/**'
+      - 'contracts/**'
+      - 'tests/contract/**'
       - '.github/workflows/java-build.yml'
   pull_request:
     branches: [main]
     paths:
       - 'apps/backend/**'
+      - 'contracts/**'
+      - 'tests/contract/**'
 
 permissions:
   contents: read
@@ -60,3 +64,41 @@ jobs:
       - name: OWASP Dependency Check
         run: mvn -B dependency-check:check --no-transfer-progress
         continue-on-error: true
+
+  # The platform contract suite (tests/contract) runs unchanged against the Spring Boot jar,
+  # with PostgreSQL behind it and the Python agent service in front of the sandbox.
+  contract:
+    name: Platform contract (Spring Boot)
+    runs-on: ubuntu-latest
+    needs: build
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: copilot_contract
+          POSTGRES_USER: copilot
+          POSTGRES_PASSWORD: ci-only-not-a-secret
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U copilot -d copilot_contract"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: 'maven'
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.13"
+          cache: pip
+      - run: pip install -e ".[dev]"
+      - name: Build the jar
+        run: mvn -B -q -f apps/backend/pom.xml package -DskipTests -Dspotless.check.skip=true -Dcheckstyle.skip=true --no-transfer-progress
+      - name: Contract suite against Spring Boot and the Python facade
+        env:
+          COPILOT_SPRING_DB_URL: jdbc:postgresql://127.0.0.1:5432/copilot_contract
+          COPILOT_SPRING_DB_USER: copilot
+          COPILOT_SPRING_DB_PASSWORD: ci-only-not-a-secret
+        run: pytest -q tests/contract

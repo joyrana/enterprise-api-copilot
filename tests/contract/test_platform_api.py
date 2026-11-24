@@ -18,6 +18,7 @@ from ai.api.platform_app import (
     PlatformConfig,
     create_platform_app,
 )
+from tests.contract import spring_target
 from tests.contract.openapi_contract import Contract
 from tests.support import Harness, build_harness
 
@@ -26,14 +27,34 @@ KEY = b"p" * 32
 WRITE = "Create a payment of ₹750 for customer cust_acm0002"
 
 
-@pytest.fixture(scope="module")
-def env() -> Iterator[tuple[TestClient, Harness]]:
-    h = build_harness()
-    app = create_platform_app(
-        h.services, PlatformConfig(token_key=KEY, run_store=InMemoryCheckpointStore())
-    )
-    with TestClient(app) as client:
-        yield client, h
+_SPRING_SKIP = spring_target.unavailable_reason()
+TARGETS = [
+    "python",
+    pytest.param(
+        "spring",
+        marks=pytest.mark.skipif(_SPRING_SKIP is not None, reason=_SPRING_SKIP or ""),
+    ),
+]
+
+
+@pytest.fixture(scope="module", params=TARGETS)
+def env(request: pytest.FixtureRequest) -> Iterator[tuple[TestClient, Harness]]:
+    """The same contract tests run against each implementation of platform-api.yaml.
+
+    ``python`` is the in-process reference facade; ``spring`` is the Spring Boot backend started
+    as a real process with PostgreSQL and the agent service behind it.
+    """
+    CONTRACT.covered.clear()  # coverage is asserted per implementation
+    if request.param == "python":
+        h = build_harness()
+        app = create_platform_app(
+            h.services, PlatformConfig(token_key=KEY, run_store=InMemoryCheckpointStore())
+        )
+        with TestClient(app) as client:
+            yield client, h
+    else:
+        with spring_target.spring_stack() as (client, h):
+            yield client, h  # type: ignore[misc]
 
 
 def call(
@@ -423,6 +444,6 @@ def test_tenant_isolation(env: tuple[TestClient, Harness]) -> None:
     assert call(client, "GET", "/api/v1/runs", alice, params={"status": "BOGUS"}).status_code == 400
 
 
-def test_every_documented_operation_was_exercised() -> None:
-    # Runs last in this module (pytest preserves definition order).
+def test_every_documented_operation_was_exercised(env: tuple[TestClient, Harness]) -> None:
+    # Runs last for each implementation (pytest preserves definition order within a param).
     assert CONTRACT.operations() - CONTRACT.covered == set()

@@ -470,3 +470,31 @@ async def test_a_skill_rejected_twice_is_no_longer_offered() -> None:
     assert "api.call.read" in offered(plan_requests[1])
     assert "api.call.read" not in offered(plan_requests[2])
     assert 'api.describe with operation_id "listPayments"' in plan_requests[2].user  # the hint
+
+
+async def test_null_words_from_a_small_model_are_read_as_empty_not_invalid() -> None:
+    raw = json.dumps(
+        {
+            "intent": "code_generation",
+            "confidence": 1,
+            "rationale": "asks for a cURL command",
+            "entities": {
+                "payment_id": "null",  # the string, not JSON null
+                "amount_minor": "null",
+                "status_codes": None,
+                "languages": "none",
+                "operation_hint": "refund a payment",
+            },
+        }
+    )
+    llm = ScriptedModelProvider([raw])
+    result = await LLMIntentClassifier(llm).aclassify("show me the curl for it")
+    assert result.intent is Intent.CODE_GENERATION and len(llm.requests) == 1  # no repair call
+    assert result.entities.payment_id is None and result.entities.status_codes == []
+
+
+async def test_a_model_invented_value_in_a_tolerated_field_is_still_dropped() -> None:
+    llm = ScriptedModelProvider([intent("api_execution", payment_id="refunds a payment")])
+    classifier = LLMIntentClassifier(llm)
+    result = await classifier.aclassify("refund it")
+    assert result.entities.payment_id is None and "payment_id" in classifier.dropped_entities

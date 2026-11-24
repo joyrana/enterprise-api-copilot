@@ -292,12 +292,20 @@ class RunService:
             self.store.save(resumed)
             return resumed
 
-    async def resume_with_token(self, run_id: str, tenant_id: str, approval_token: str) -> RunState:
+    async def resume_with_token(
+        self, run_id: str, tenant_id: str, approval_token: str, approver: str | None = None
+    ) -> RunState:
+        """Continue after an approval minted elsewhere (the platform owns approvals).
+
+        ``approver`` (the subject the platform vetted) is recorded as an ``approved`` event.
+        """
         async with self._lock(run_id):
             state = self.get(run_id, tenant_id)
             if state.status is not RunStatus.AWAITING_APPROVAL:
                 raise RunConflictError("run is not awaiting approval")
             resumed = await self.orchestrator.resume(run_id, approval_token=approval_token)
+            if approver is not None:
+                resumed.events.append(RunEvent(kind="approved", detail={"approver": approver}))
             self.store.save(resumed)
             return resumed
 

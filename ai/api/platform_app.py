@@ -12,7 +12,6 @@ from __future__ import annotations
 
 import os
 import secrets
-import uuid
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 
@@ -25,13 +24,13 @@ from starlette.routing import Route
 from ai.agent.contracts import RunStatus
 from ai.agent.orchestrator import CheckpointStore, InMemoryCheckpointStore, Orchestrator
 from ai.api.auth import TokenAuthority
+from ai.api.catalog import CatalogApi
 from ai.api.http import ApiProblemError, endpoint, json, parse_body
 from ai.api.runs import RunService, RunView
 from ai.api.sse import stream_run
 from ai.bootstrap import Services
 from skills.runtime.approval_service import ApprovalService
-from skills.runtime.contracts import InvocationContext, Principal
-from skills.runtime.errors import SkillErrorCode
+from skills.runtime.contracts import Principal
 from skills.runtime.policy import LocalPolicyEngine
 
 VERSION = "0.3.0"
@@ -99,14 +98,6 @@ class _Reject(BaseModel):
     reason: str | None = Field(default=None, max_length=500)
 
 
-_SKILL_STATUS = {
-    SkillErrorCode.FORBIDDEN: (403, "ACCESS_DENIED"),
-    SkillErrorCode.NOT_FOUND: (404, "RESOURCE_NOT_FOUND"),
-    SkillErrorCode.INVALID_INPUT: (400, "VALIDATION_ERROR"),
-    SkillErrorCode.ENVIRONMENT_NOT_ALLOWED: (403, "ACCESS_DENIED"),
-}
-
-
 def create_platform_app(services: Services, config: PlatformConfig | None = None) -> Starlette:
     if services.settings.runtime_mode not in {"local", "test"}:
         raise RuntimeError("the local platform facade only runs in local/test mode (ADR-0009)")
@@ -124,26 +115,7 @@ def create_platform_app(services: Services, config: PlatformConfig | None = None
     approvals = ApprovalService(services.approval_signer, LocalPolicyEngine())
     runs = RunService(orchestrator, store, approvals)
 
-    def _ctx(principal: Principal) -> InvocationContext:
-        return InvocationContext(
-            principal=principal,
-            environment=config.default_environment,
-            correlation_id=f"api_{uuid.uuid4().hex[:16]}",
-        )
-
-    async def _skill(
-        skill_id: str, args: dict[str, object], principal: Principal
-    ) -> dict[str, object]:
-        result = await services.runtime.invoke(skill_id, args, _ctx(principal))
-        if result.ok and result.output is not None:
-            return result.output
-        code = result.error.code if result.error else SkillErrorCode.INTERNAL_ERROR
-        status, api_code = _SKILL_STATUS.get(
-            code, (502 if code.value.startswith("UPSTREAM") else 500, code.value)
-        )
-        raise ApiProblemError(
-            status, api_code, result.error.message if result.error else "skill failed"
-        )
+    catalog = CatalogApi(services, config.default_environment)
 
     def _run_json(state_view: RunView, status: int = 200) -> Response:
         return json(state_view.model_dump(mode="json"), status)
@@ -177,41 +149,15 @@ def create_platform_app(services: Services, config: PlatformConfig | None = None
 
     async def skills(request: Request, principal: Principal | None) -> Response:
         assert_principal(principal)
-        return json(
-            {
-                "skills": [
-                    {
-                        "id": d.id,
-                        "name": d.name,
-                        "version": d.version,
-                        "description": d.description,
-                        "side_effect": d.side_effect.value,
-                        "required_permissions": d.required_permissions,
-                        "requires_approval": d.requires_approval,
-                    }
-                    for d in services.registry.descriptors()
-                ]
-            }
-        )
+        return json(catalog.skills())
 
     async def search(request: Request, principal: Principal | None) -> Response:
         p = assert_principal(principal)
-        query = request.query_params.get("q", "")
-        try:
-            limit = int(request.query_params.get("limit", "5"))
-        except ValueError as exc:
-            raise ApiProblemError(400, "VALIDATION_ERROR", "limit must be an integer") from exc
-        if not query or len(query) > 500 or not 1 <= limit <= 20:
-            raise ApiProblemError(
-                400, "VALIDATION_ERROR", "q is required (max 500 chars) and limit must be 1-20"
-            )
-        return json(await _skill("api.search", {"query": query, "limit": limit}, p))
+        return json(await catalog.search(request.query_params, p))
 
     async def describe(request: Request, principal: Principal | None) -> Response:
         p = assert_principal(principal)
-        return json(
-            await _skill("api.describe", {"operation_id": request.path_params["operation_id"]}, p)
-        )
+        return json(await catalog.describe(request.path_params["operation_id"], p))
 
     async def create_run(request: Request, principal: Principal | None) -> Response:
         p = assert_principal(principal)
