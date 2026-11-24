@@ -345,3 +345,67 @@ def test_component_registry_matches_the_platform_contract() -> None:
     schema = yaml.safe_load(CONTRACT.read_text(encoding="utf-8"))
     enum = schema["components"]["schemas"]["UIComponent"]["properties"]["component"]["enum"]
     assert set(enum) == set(REGISTRY)
+
+
+async def _paused_write(tmp_path: Path) -> tuple[Any, FileCheckpointStore, str]:
+    h = build_harness()
+    store = FileCheckpointStore(tmp_path)
+    llm = ScriptedModelProvider(
+        [
+            intent("api_execution", amount_minor=50000, currency="INR"),
+            call("api.search", query="create a payment"),
+            call("api.describe", operation_id="createPayment"),
+            call("api.call.write", operation_id="createPayment", body={}),
+        ]
+    )
+    state = await Orchestrator(h.services.runtime, llm=llm, checkpoints=store).run(
+        "Create a sandbox payment of ₹500 for customer cust_acm0001",
+        principal=DEV,
+        environment="sandbox",
+    )
+    assert state.status is RunStatus.AWAITING_APPROVAL and state.pending_approval
+    token = await ApprovalService(h.services.approval_signer, LocalPolicyEngine()).approve(
+        approver=APPROVER,
+        action_hash=state.pending_approval.action_hash,
+        tenant_id="acme",
+        environment="sandbox",
+    )
+    return h, store, f"{state.run_id}:{token}"
+
+
+@pytest.mark.parametrize(("resume_outputs", "stage"), [([FINISH], "respond"), ([], "plan")])
+async def test_model_failure_after_an_executed_write_still_completes(
+    tmp_path: Path, resume_outputs: list[str], stage: str
+) -> None:
+    h, store, handle = await _paused_write(tmp_path)
+    run_id, token = handle.split(":", 1)
+    resumed = await Orchestrator(
+        h.services.runtime, llm=FailsAfter(resume_outputs), checkpoints=store
+    ).resume(run_id, approval_token=token)
+    # The payment exists, so the run must not read as a failure that invites a retry.
+    assert len(h.app.state.sandbox.tenant("acme").payments) == 4
+    assert resumed.status is RunStatus.COMPLETED
+    assert resumed.message.startswith("The action succeeded, but the summary could not")
+    unavailable = [e for e in resumed.events if e.kind == "summary_unavailable"]
+    assert len(unavailable) == 1 and unavailable[0].detail["stage"] == stage
+    assert sum(e.kind == "model_failed" for e in resumed.events) == 1  # responder not retried
+    assert "api_response" in [c.component for c in resumed.ui]
+    assert store.load(run_id) is not None and store.load(run_id).status is RunStatus.COMPLETED  # type: ignore[union-attr]
+
+
+async def test_model_failure_before_any_write_still_fails() -> None:
+    h = build_harness()
+    llm = FailsAfter(
+        [
+            intent("api_execution", amount_minor=50000, currency="INR"),
+            call("api.search", query="create a payment"),
+        ]
+    )
+    state = await Orchestrator(h.services.runtime, llm=llm).run(
+        "Create a sandbox payment of ₹500 for customer cust_acm0001",
+        principal=DEV,
+        environment="sandbox",
+    )
+    assert state.status is RunStatus.FAILED
+    assert not any(e.kind == "summary_unavailable" for e in state.events)
+    assert len(h.app.state.sandbox.tenant("acme").payments) == 3

@@ -16,6 +16,8 @@ from typing import Any, Protocol, TypeVar
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
+from skills.runtime.redaction import mask_jwts, redact_text
+
 T = TypeVar("T", bound=BaseModel)
 
 
@@ -59,6 +61,27 @@ class StructuredOutputError(ValueError):
 
 class ModelUnavailableError(RuntimeError):
     """The provider could not be reached or refused the request (callers fall back)."""
+
+
+def sanitize_request(request: ModelRequest) -> ModelRequest:
+    """Mask credentials in every text field before a request leaves the process.
+
+    This is the single choke point for invariant 6: all agent stages call
+    ``generate_structured``, which applies it to every attempt (including repair retries),
+    so no call site can forget. JWTs become ``<JWT>``; other credential shapes become
+    ``[REDACTED]`` (``skills.runtime.redaction``).
+    """
+
+    def clean(text: str) -> str:
+        return redact_text(mask_jwts(text))
+
+    return request.model_copy(
+        update={
+            "system": clean(request.system),
+            "untrusted_context": clean(request.untrusted_context),
+            "user": clean(request.user),
+        }
+    )
 
 
 def _extract_json(text: str) -> str:
@@ -109,7 +132,7 @@ async def generate_structured(
     request = request.model_copy(update={"json_schema": sent})
     attempt = request
     for remaining in range(repairs, -1, -1):
-        response = await provider.generate(attempt)
+        response = await provider.generate(sanitize_request(attempt))
         try:
             parsed = schema.model_validate(json.loads(_extract_json(response.text)))
         except (ValueError, ValidationError) as exc:

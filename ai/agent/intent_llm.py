@@ -83,7 +83,10 @@ class LLMIntentClassifier:
         request = ModelRequest(
             task="intent",
             system=SYSTEM,
-            user=query,
+            # The sanitizer in generate_structured masks the JWT itself; the classifier is
+            # told one was present so a bare token still classifies as token_inspection.
+            user=query
+            + ("\n\n(Note: the request contains a JWT, masked as <JWT>.)" if reference.jwt else ""),
             prompt_version=PROMPT_VERSION,
             max_output_tokens=400,
         )
