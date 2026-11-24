@@ -1,0 +1,20 @@
+{
+ "case": "l-006",
+ "provider": "mlx",
+ "model": "mlx-community/Qwen3-4B-Instruct-2507-4bit",
+ "recorded_at": "2026-11-24T03:44:25.193981+00:00",
+ "prompt_versions": [
+  "intent=intent-v3",
+  "plan=planner-v3",
+  "respond=responder-v2"
+ ],
+ "latency_ms": 17267.4,
+ "outputs": [
+  "{\n  \"intent\": \"api_explanation\",\n  \"confidence\": 0.99,\n  \"rationale\": \"The request asks for an explanation of how the refundPayment operation works, indicating a need for operational details.\",\n  \"entities\": {\n    \"operation_hint\": \"refundPayment\"\n  }\n}",
+  "{\"thought\": \"Find details about the refundPayment operation\", \"action\": \"call\", \"skill_id\": \"api.search\", \"arguments\": {\"query\": \"refundPayment operation\"}}",
+  "{\"thought\": \"Find details about the refundPayment operation\", \"action\": \"call\", \"skill_id\": \"api.describe\", \"arguments\": {\"operation_id\": \"refundPayment\"}}",
+  "{\"thought\": \"Explanation of refundPayment operation requires detailed parameters and responses.\", \"action\": \"call\", \"skill_id\": \"api.describe\", \"arguments\": {\"operation_id\": \"refundPayment\"}}",
+  "{\"thought\": \"Explained the refundPayment operation's details and parameters.\", \"action\": \"finish\"}",
+  "{\n  \"message\": \"The `refundPayment` operation issues a full or partial refund for a captured or authorized payment. It requires the `refunds:write` scope and sends a POST request to `/v1/payments/{payment_id}/refunds`.\\n\\n- **Request body**: Must include `amount` (in smallest currency unit, e.g., 5000 = $50.00), and optionally `reason` (e.g., `requested_by_customer`, `duplicate`, `fraudulent`).\\n- **Authentication**: OAuth 2.0 client credentials with `refunds:write` scope.\\n- **Response codes**: 201 (Refund created), 403 (missing scope), 422 (refund amount exceeds refundable balance).\",\n  \"components\": [\n    {\n      \"component\": \"operation_detail\",\n      \"source\": \"describe\"\n    }\n  ]\n}"
+ ]
+}

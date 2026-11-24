@@ -2,6 +2,7 @@ import { useRef, useState } from 'react';
 import Markdown from 'react-markdown';
 import { Send, Loader2, Bot, User, Sparkles } from 'lucide-react';
 import { ApiError, type Run } from '@/api/client';
+import { describeProgress } from '@/api/sse';
 import { platform, getToken, setToken } from '@/api/session';
 import { GenUI } from '@/components/genui/GenUI';
 
@@ -12,6 +13,9 @@ type Message =
 
 function describeError(err: unknown): string {
   if (err instanceof ApiError) {
+    if (err.status === 429 && err.retryAfterS) {
+      return `The model is busy. Try again in about ${err.retryAfterS}s.`;
+    }
     return `${err.code} (HTTP ${err.status}): ${err.message}${err.requestId ? ` — request ${err.requestId}` : ''}`;
   }
   return err instanceof Error ? err.message : 'Unexpected error';
@@ -42,6 +46,8 @@ export function ChatPage() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  // Live steps of the run in progress (no bare spinner).
+  const [progress, setProgress] = useState<string[]>([]);
   const [signedIn, setSignedIn] = useState<boolean>(() => getToken() !== null);
   const [devUser, setDevUser] = useState('alice');
   // One conversation per page load: earlier turns give the agent context for follow-ups.
@@ -78,11 +84,22 @@ export function ChatPage() {
       if (!conversation.current) {
         conversation.current = (await platform.createConversation()).conversation_id;
       }
-      showRun(await platform.createRun(query, 'sandbox', conversation.current));
+      setProgress([]);
+      const started = await platform.createRunAsync(query, 'sandbox', conversation.current);
+      if (started.status === 'RUNNING') {
+        await platform.streamRun(started.run_id, (event) => {
+          const line = describeProgress(event);
+          if (line) setProgress((prev) => [...prev, line]);
+        });
+        showRun(await platform.getRun(started.run_id));
+      } else {
+        showRun(started); // routed to a run that was waiting for this answer
+      }
     } catch (err) {
       append({ id: stamp(), role: 'error', content: describeError(err), timestamp: new Date() });
     } finally {
       setIsLoading(false);
+      setProgress([]);
     }
   };
 
@@ -229,7 +246,15 @@ export function ChatPage() {
             </div>
             <div className="bg-gray-800 rounded-2xl rounded-tl-sm px-4 py-3 flex items-center gap-2 text-xs text-gray-400">
               <Loader2 className="w-4 h-4 animate-spin" />
-              Agent is classifying, planning and calling skills…
+              {progress.length === 0 ? (
+                <span>Waiting for the model…</span>
+              ) : (
+                <ol className="space-y-0.5" aria-label="Run progress">
+                  {progress.map((line, i) => (
+                    <li key={`${i}-${line}`}>{line}</li>
+                  ))}
+                </ol>
+              )}
             </div>
           </div>
         )}

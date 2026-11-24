@@ -1,0 +1,22 @@
+{
+ "case": "l-017",
+ "provider": "mlx",
+ "model": "mlx-community/Qwen3-4B-Instruct-2507-4bit",
+ "recorded_at": "2026-11-24T03:50:02.079006+00:00",
+ "prompt_versions": [
+  "intent=intent-v3",
+  "plan=planner-v3",
+  "respond=responder-v2"
+ ],
+ "latency_ms": 14795.0,
+ "outputs": [
+  "{\n  \"intent\": \"token_inspection\",\n  \"confidence\": 1,\n  \"rationale\": \"The request asks to inspect the validity of an access token provided as a JWT.\",\n  \"entities\": {\n    \"payment_id\": null,\n    \"customer_id\": null,\n    \"order_id\": null,\n    \"amount_minor\": null,\n    \"currency\": null,\n    \"status_codes\": [],\n    \"languages\": [],\n    \"status_filter\": null,\n    \"refund_reason\": null,\n    \"operation_hint\": null\n  }\n}",
+  "{\"thought\": \"Inspect the access token to verify its validity and details.\", \"action\": \"call\", \"skill_id\": \"token.inspect\", \"arguments\": {\"token\": \"$JWT\"}}",
+  "{\"thought\": \"Verify token validity by decoding the JWT\", \"action\": \"call\", \"skill_id\": \"token.inspect\", \"arguments\": {\"token\": \"<JWT>\"}}",
+  "{\"thought\": \"Validate the access token's validity using JWT inspection.\", \"action\": \"call\", \"skill_id\": \"token.inspect\", \"arguments\": {\"token\": \"<JWT>\"}}",
+  "{\"thought\": \"Validate the access token's validity using JWT inspection.\", \"action\": \"call\", \"skill_id\": \"token.inspect\", \"arguments\": {\"token\": \"<JWT>\"}}",
+  "{\"thought\": \"Validate the access token's validity using JWT inspection.\", \"action\": \"call\", \"skill_id\": \"token.inspect\", \"arguments\": {\"token\": \"<JWT>\"}}",
+  "{\"thought\": \"Validate the access token's validity using JWT inspection.\", \"action\": \"call\", \"skill_id\": \"token.inspect\", \"arguments\": {\"token\": \"<JWT>\"}}",
+  "{\"message\":\"The provided JWT cannot be decoded, so its validity cannot be determined. The token inspection failed due to invalid input.\",\"components\":[{\"component\":\"jwt_report\",\"source\":\"\"}]}"
+ ]
+}

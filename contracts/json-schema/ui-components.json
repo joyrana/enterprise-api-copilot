@@ -1,0 +1,918 @@
+{
+  "components": [
+    {
+      "description": "Table of API operations found by a search (method, path, summary, scopes).",
+      "name": "operation_list",
+      "props_schema": {
+        "$defs": {
+          "OperationSummary": {
+            "additionalProperties": false,
+            "properties": {
+              "api": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Api"
+              },
+              "invocation_skill": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Invocation Skill"
+              },
+              "method": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Method"
+              },
+              "operation_id": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Operation Id"
+              },
+              "path": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Path"
+              },
+              "scopes": {
+                "items": {
+                  "type": "string"
+                },
+                "title": "Scopes",
+                "type": "array"
+              },
+              "summary": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Summary"
+              }
+            },
+            "title": "OperationSummary",
+            "type": "object"
+          }
+        },
+        "additionalProperties": false,
+        "properties": {
+          "operations": {
+            "items": {
+              "$ref": "#/$defs/OperationSummary"
+            },
+            "title": "Operations",
+            "type": "array"
+          }
+        },
+        "required": [
+          "operations"
+        ],
+        "title": "OperationListProps",
+        "type": "object"
+      },
+      "selectable": true,
+      "sources": [
+        "api.search"
+      ]
+    },
+    {
+      "description": "Full contract of one operation: auth, scopes, parameters, body fields, responses.",
+      "name": "operation_detail",
+      "props_schema": {
+        "$defs": {
+          "BodyField": {
+            "additionalProperties": false,
+            "properties": {
+              "description": {
+                "default": "",
+                "title": "Description",
+                "type": "string"
+              },
+              "enum": {
+                "anyOf": [
+                  {
+                    "items": {},
+                    "type": "array"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Enum"
+              },
+              "name": {
+                "title": "Name",
+                "type": "string"
+              },
+              "required": {
+                "title": "Required",
+                "type": "boolean"
+              },
+              "type": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Type"
+              }
+            },
+            "required": [
+              "name",
+              "required"
+            ],
+            "title": "BodyField",
+            "type": "object"
+          },
+          "ParameterRow": {
+            "additionalProperties": false,
+            "properties": {
+              "description": {
+                "default": "",
+                "title": "Description",
+                "type": "string"
+              },
+              "location": {
+                "title": "Location",
+                "type": "string"
+              },
+              "name": {
+                "title": "Name",
+                "type": "string"
+              },
+              "required": {
+                "title": "Required",
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "name",
+              "location",
+              "required"
+            ],
+            "title": "ParameterRow",
+            "type": "object"
+          }
+        },
+        "additionalProperties": false,
+        "properties": {
+          "api_title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Api Title"
+          },
+          "api_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Api Version"
+          },
+          "authentication": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Authentication"
+          },
+          "body_fields": {
+            "items": {
+              "$ref": "#/$defs/BodyField"
+            },
+            "title": "Body Fields",
+            "type": "array"
+          },
+          "body_required": {
+            "default": false,
+            "title": "Body Required",
+            "type": "boolean"
+          },
+          "deprecated": {
+            "default": false,
+            "title": "Deprecated",
+            "type": "boolean"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Description"
+          },
+          "method": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Method"
+          },
+          "operation_id": {
+            "title": "Operation Id",
+            "type": "string"
+          },
+          "parameters": {
+            "items": {
+              "$ref": "#/$defs/ParameterRow"
+            },
+            "title": "Parameters",
+            "type": "array"
+          },
+          "path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Path"
+          },
+          "responses": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Responses",
+            "type": "object"
+          },
+          "scopes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Scopes",
+            "type": "array"
+          },
+          "side_effect": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Side Effect"
+          },
+          "summary": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Summary"
+          }
+        },
+        "required": [
+          "operation_id"
+        ],
+        "title": "OperationDetailProps",
+        "type": "object"
+      },
+      "selectable": true,
+      "sources": [
+        "api.describe"
+      ]
+    },
+    {
+      "description": "Tabbed code samples (cURL, Python, JavaScript, Java) for an operation.",
+      "name": "code_snippets",
+      "props_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "notes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Notes",
+            "type": "array"
+          },
+          "operation_id": {
+            "title": "Operation Id",
+            "type": "string"
+          },
+          "snippets": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Snippets",
+            "type": "object"
+          }
+        },
+        "required": [
+          "operation_id"
+        ],
+        "title": "CodeSnippetsProps",
+        "type": "object"
+      },
+      "selectable": true,
+      "sources": [
+        "code.generate"
+      ]
+    },
+    {
+      "description": "Result of an executed API call: HTTP status, response JSON, correlation id, cURL.",
+      "name": "api_response",
+      "props_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "correlation_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Correlation Id"
+          },
+          "curl": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Curl"
+          },
+          "method": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Method"
+          },
+          "ok": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Ok"
+          },
+          "operation_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Operation Id"
+          },
+          "path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Path"
+          },
+          "response_body": {
+            "default": null,
+            "title": "Response Body"
+          },
+          "response_preview": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Response Preview"
+          },
+          "retry_after_s": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Retry After S"
+          },
+          "status_code": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Status Code"
+          }
+        },
+        "title": "ApiResponseProps",
+        "type": "object"
+      },
+      "selectable": true,
+      "sources": [
+        "api.call.delete",
+        "api.call.read",
+        "api.call.write"
+      ]
+    },
+    {
+      "description": "Documentation passages and citations that back the answer.",
+      "name": "doc_sources",
+      "props_schema": {
+        "$defs": {
+          "DocSource": {
+            "additionalProperties": false,
+            "properties": {
+              "flagged": {
+                "anyOf": [
+                  {
+                    "type": "boolean"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Flagged"
+              },
+              "section": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Section"
+              },
+              "source_id": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Source Id"
+              },
+              "title": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Title"
+              },
+              "uri": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Uri"
+              }
+            },
+            "title": "DocSource",
+            "type": "object"
+          }
+        },
+        "additionalProperties": false,
+        "properties": {
+          "abstained": {
+            "default": false,
+            "title": "Abstained",
+            "type": "boolean"
+          },
+          "citations": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Citations",
+            "type": "array"
+          },
+          "extract": {
+            "default": "",
+            "title": "Extract",
+            "type": "string"
+          },
+          "sources": {
+            "items": {
+              "$ref": "#/$defs/DocSource"
+            },
+            "title": "Sources",
+            "type": "array"
+          }
+        },
+        "title": "DocSourcesProps",
+        "type": "object"
+      },
+      "selectable": true,
+      "sources": [
+        "docs.search"
+      ]
+    },
+    {
+      "description": "Decoded JWT: algorithm, expiry, scopes, masked claims and detected problems.",
+      "name": "jwt_report",
+      "props_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "algorithm": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Algorithm"
+          },
+          "claims": {
+            "additionalProperties": true,
+            "title": "Claims",
+            "type": "object"
+          },
+          "expired": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Expired"
+          },
+          "expires_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Expires At"
+          },
+          "issued_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Issued At"
+          },
+          "issues": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Issues",
+            "type": "array"
+          },
+          "key_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Key Id"
+          },
+          "kind": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Kind"
+          },
+          "lifetime_s": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Lifetime S"
+          },
+          "missing_scopes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Missing Scopes",
+            "type": "array"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Note"
+          },
+          "scopes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Scopes",
+            "type": "array"
+          },
+          "verified": {
+            "default": false,
+            "title": "Verified",
+            "type": "boolean"
+          }
+        },
+        "title": "JwtReportProps",
+        "type": "object"
+      },
+      "selectable": true,
+      "sources": [
+        "token.inspect"
+      ]
+    },
+    {
+      "description": "Timeline of the skills the agent called to produce this answer.",
+      "name": "run_trace",
+      "props_schema": {
+        "$defs": {
+          "TraceStep": {
+            "additionalProperties": false,
+            "properties": {
+              "duration_ms": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Duration Ms"
+              },
+              "ok": {
+                "anyOf": [
+                  {
+                    "type": "boolean"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Ok"
+              },
+              "purpose": {
+                "default": "",
+                "title": "Purpose",
+                "type": "string"
+              },
+              "skill_id": {
+                "title": "Skill Id",
+                "type": "string"
+              },
+              "step_id": {
+                "title": "Step Id",
+                "type": "string"
+              }
+            },
+            "required": [
+              "step_id",
+              "skill_id"
+            ],
+            "title": "TraceStep",
+            "type": "object"
+          }
+        },
+        "additionalProperties": false,
+        "properties": {
+          "mode": {
+            "title": "Mode",
+            "type": "string"
+          },
+          "steps": {
+            "items": {
+              "$ref": "#/$defs/TraceStep"
+            },
+            "title": "Steps",
+            "type": "array"
+          }
+        },
+        "required": [
+          "steps",
+          "mode"
+        ],
+        "title": "RunTraceProps",
+        "type": "object"
+      },
+      "selectable": true,
+      "sources": []
+    },
+    {
+      "description": "Approve or reject a pending side-effecting action (server-controlled).",
+      "name": "approval_request",
+      "props_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "action_hash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Action Hash",
+            "type": "string"
+          },
+          "arguments": {
+            "additionalProperties": true,
+            "title": "Arguments",
+            "type": "object"
+          },
+          "environment": {
+            "title": "Environment",
+            "type": "string"
+          },
+          "skill_id": {
+            "title": "Skill Id",
+            "type": "string"
+          },
+          "summary": {
+            "title": "Summary",
+            "type": "string"
+          }
+        },
+        "required": [
+          "summary",
+          "action_hash",
+          "skill_id",
+          "environment",
+          "arguments"
+        ],
+        "title": "ApprovalRequestProps",
+        "type": "object"
+      },
+      "selectable": false,
+      "sources": []
+    },
+    {
+      "description": "Ask the user for missing required values (server-controlled).",
+      "name": "clarification",
+      "props_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "missing_fields": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Missing Fields",
+            "type": "array"
+          },
+          "question": {
+            "title": "Question",
+            "type": "string"
+          }
+        },
+        "required": [
+          "question"
+        ],
+        "title": "ClarificationProps",
+        "type": "object"
+      },
+      "selectable": false,
+      "sources": []
+    }
+  ],
+  "description": "Generated from ai/agent/ui.py (python -m ai.agent.ui --write). Do not edit by hand.",
+  "version": 1
+}

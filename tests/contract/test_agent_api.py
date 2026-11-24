@@ -151,5 +151,33 @@ def test_clarify_endpoint(env: tuple[TestClient, Harness]) -> None:
     assert call(client, "POST", path, svc(ALICE), json={}).status_code == 400
 
 
+def test_async_start_and_events(env: tuple[TestClient, Harness]) -> None:
+    client, _ = env
+    accepted = call(
+        client,
+        "POST",
+        "/internal/v1/runs",
+        svc(ALICE),
+        params={"mode": "async"},
+        json={"query": "which API lists customers?", "environment": "sandbox"},
+    )
+    assert accepted.status_code == 202
+    run_id = accepted.json()["run_id"]
+    with client.stream(
+        "GET",
+        f"/internal/v1/runs/{run_id}/events",
+        headers={"Authorization": f"Bearer {svc(ALICE)}"},
+    ) as r:
+        r.read()
+    assert CONTRACT.check(r).status_code == 200 and "event: status" in r.text
+    with client.stream(
+        "GET",
+        f"/internal/v1/runs/{run_id}/events",
+        headers={"Authorization": f"Bearer {svc(GINA)}"},
+    ) as other:
+        other.read()
+    assert CONTRACT.check(other).status_code == 404
+
+
 def test_every_documented_operation_was_exercised() -> None:
     assert CONTRACT.operations() - CONTRACT.covered == set()

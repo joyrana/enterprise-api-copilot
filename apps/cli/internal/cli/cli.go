@@ -84,6 +84,7 @@ Commands:
 Global flags:
   --backend-url URL   Platform API (default from config, COPILOT_BACKEND_URL or http://localhost:8080)
   --output FORMAT     pretty | json (default pretty)
+  --json              Raw JSON (same as --output json)
   --config PATH       Config file (default ~/.config/copilot/config.json)
   --timeout DURATION  Request timeout (default 2m)
 
@@ -97,6 +98,7 @@ func Run(args []string, streams IO) int {
 	global.SetOutput(io.Discard)
 	global.StringVar(&a.backendURL, "backend-url", "", "")
 	formatFlag := global.String("output", "pretty", "")
+	jsonFlag := global.Bool("json", false, "")
 	global.StringVar(&a.configPath, "config", "", "")
 	global.DurationVar(&a.timeout, "timeout", 2*time.Minute, "")
 	help := global.Bool("help", false, "")
@@ -106,6 +108,9 @@ func Run(args []string, streams IO) int {
 	if *help || global.NArg() == 0 {
 		_, _ = fmt.Fprint(streams.Out, usage)
 		return ExitOK
+	}
+	if *jsonFlag {
+		*formatFlag = string(output.JSON)
 	}
 	format, err := output.ParseFormat(*formatFlag)
 	if err != nil {

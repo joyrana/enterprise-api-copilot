@@ -98,6 +98,8 @@ def build_docs_skill(
         handler=search,
         required_permissions=frozenset({DOCS_READ}),
         side_effect=SideEffect.READ,
+        intents=frozenset({'api_execution', 'troubleshooting', 'token_inspection', 'docs_question'}),
+        order=70,
         timeout_s=5,
         audit_required=False,
     )

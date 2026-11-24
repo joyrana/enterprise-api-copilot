@@ -9,10 +9,11 @@ Talks to ``mlx_lm.server`` (Apple Silicon), which serves the OpenAI-compatible
 The server loads whatever model a request names, so ``COPILOT_LLM_MODEL`` must match
 the ``--model`` it was started with, or it downloads and loads a second model.
 
-When the request carries a JSON schema the schema is stated in the system prompt and
-also sent as ``response_format`` (mlx-lm 0.29 ignores it; ``generate_structured``
-validates the reply either way). The default model is the non-thinking Instruct-2507
-variant; for hybrid Qwen3 checkpoints start the server with
+When the request carries a JSON schema the schema is stated in the system prompt. A probe
+on the first structured call (``probe_structured_output``) detects whether the server
+enforces ``response_format``; only then is it also sent (mlx-lm 0.29 ignores it, so it is
+not). ``generate_structured`` validates the reply either way. The default model is the
+non-thinking Instruct-2507 variant; for hybrid Qwen3 checkpoints start the server with
 ``--chat-template-args '{"enable_thinking":false}'``. Any ``<think>`` block is stripped.
 Untrusted context is wrapped and sent as user content, never merged into the system
 prompt.
@@ -50,8 +51,48 @@ class MLXServerProvider:
         self._timeout = timeout_s
         self._thinking = thinking
         self._transport = transport
+        # None = not probed yet. ``response_format`` is only sent when the server honours it.
+        self.honours_response_format: bool | None = None
+
+    async def probe_structured_output(self) -> bool:
+        """Does the server enforce ``response_format``? (mlx-lm 0.29 does not.)
+
+        Asks for a reply that only a schema-constrained decoder can produce: the prompt says
+        to answer in prose, the schema allows exactly one enum value. Constrained decoding
+        returns that value; an ignoring server answers in prose.
+        """
+        marker = "zq-constrained"
+        schema = {
+            "type": "object",
+            "properties": {"answer": {"type": "string", "enum": [marker]}},
+            "required": ["answer"],
+        }
+        body = {
+            "model": self.model,
+            "stream": False,
+            "temperature": 0,
+            "max_tokens": 40,
+            "messages": [{"role": "user", "content": "Say hello in one short English sentence."}],
+            "chat_template_kwargs": {"enable_thinking": False},
+            "response_format": {
+                "type": "json_schema",
+                "json_schema": {"name": "probe", "schema": schema},
+            },
+        }
+        try:
+            async with httpx.AsyncClient(
+                timeout=self._timeout, transport=self._transport
+            ) as client:
+                response = await client.post(f"{self._base}/v1/chat/completions", json=body)
+            text = str(response.json()["choices"][0]["message"]["content"])
+            self.honours_response_format = marker in text
+        except (httpx.HTTPError, ValueError, KeyError, IndexError):
+            self.honours_response_format = False  # unknown: do not rely on it
+        return self.honours_response_format
 
     async def generate(self, request: ModelRequest) -> ModelResponse:
+        if request.json_schema is not None and self.honours_response_format is None:
+            await self.probe_structured_output()
         system = request.system
         if request.json_schema is not None:
             system += (
@@ -75,7 +116,7 @@ class MLXServerProvider:
             ],
             "chat_template_kwargs": {"enable_thinking": self._thinking},
         }
-        if request.json_schema is not None:
+        if request.json_schema is not None and self.honours_response_format:
             body["response_format"] = {
                 "type": "json_schema",
                 "json_schema": {"name": request.task, "schema": request.json_schema},

@@ -1,0 +1,20 @@
+{
+ "case": "l-002",
+ "provider": "mlx",
+ "model": "mlx-community/Qwen3-4B-Instruct-2507-4bit",
+ "recorded_at": "2026-11-24T03:43:30.790491+00:00",
+ "prompt_versions": [
+  "intent=intent-v3",
+  "plan=planner-v3",
+  "respond=responder-v2"
+ ],
+ "latency_ms": 12752.0,
+ "outputs": [
+  "{\n  \"intent\": \"api_discovery\",\n  \"confidence\": 0.99,\n  \"rationale\": \"The request asks for the endpoint to track a shipment, indicating discovery of the appropriate API operation.\",\n  \"entities\": {\n    \"operation_hint\": \"track a shipment\"\n  }\n}",
+  "{\"thought\": \"Search for API operations related to tracking a shipment.\", \"action\": \"call\", \"skill_id\": \"api.search\", \"arguments\": {\"query\": \"track a shipment\", \"limit\": 5, \"mode\": \"hybrid\"}}",
+  "{\"thought\": \"Identify the operation for tracking a shipment.\", \"action\": \"call\", \"skill_id\": \"api.describe\", \"arguments\": {\"operation_id\": \"getShipmentTracking\"}}",
+  "{\"thought\": \"Identify the endpoint for tracking a shipment.\", \"action\": \"call\", \"skill_id\": \"api.describe\", \"arguments\": {\"operation_id\": \"getShipmentTracking\"}}",
+  "{\"thought\": \"Endpoint for tracking a shipment is identified in the search results.\", \"action\": \"finish\"}",
+  "{\n  \"message\": \"Use the `GET /v2/orders/{order_id}/shipment` endpoint to track a shipment. It requires the `orders:read` scope.\",\n  \"components\": [\n    {\n      \"component\": \"operation_detail\",\n      \"source\": \"getShipmentTracking\"\n    }\n  ]\n}"
+ ]
+}

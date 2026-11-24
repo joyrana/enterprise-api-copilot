@@ -26,7 +26,7 @@ from ai.models.base import ModelProvider, ModelRequest, ModelUsage, generate_str
 from skills.runtime.contracts import SkillDescriptor
 from skills.runtime.redaction import redact, redact_text
 
-PROMPT_VERSION = "planner-v3"
+PROMPT_VERSION = "planner-v4"
 JWT_PLACEHOLDER = "$JWT"
 _MAX_OBSERVATION_CHARS = 2400
 
@@ -229,8 +229,23 @@ def request_brief(state: RunState) -> str:
 _DESCRIBE_FIRST = re.compile(r"call api\.describe for operation '([^']+)'")
 
 
+def _discovery_answered(state: RunState) -> bool:
+    """A discovery request whose api.search already returned operations."""
+    if state.intent is None or state.intent.intent.value != "api_discovery":
+        return False
+    return any(
+        r.ok and r.skill_id == "api.search" and (r.output or {}).get("results")
+        for r in state.results.values()
+    )
+
+
 def next_step_hint(state: RunState) -> str:
-    """A prompt hint (never an answer) when the last decision was refused for a missing describe."""
+    """Prompt hints (never answers): what the system already knows about the next step."""
+    if _discovery_answered(state):
+        return (
+            "The search already returned matching operations; for a discovery request that "
+            'answers it, so choose action "finish".\n'
+        )
     for event in reversed(state.events):
         if event.kind == "plan_rejected":
             if m := _DESCRIBE_FIRST.search(str(event.detail.get("reason", ""))):
@@ -258,7 +273,7 @@ class LLMStepPlanner:
             "type": "object",
             "properties": {
                 "thought": {"type": "string"},
-                "action": {"type": "string", "enum": ["call", "finish"]},
+                "action": {"type": "string", "enum": ["finish", "call"]},
                 "skill_id": {"type": "string", "enum": [*allowed, ""]},
                 "arguments": {"type": "object"},
             },

@@ -108,6 +108,11 @@ async def run(suite: str) -> dict[str, Any]:
 
 
 def main(argv: list[str] | None = None) -> int:
+    argv = list(sys.argv[1:] if argv is None else argv)
+    if argv and argv[0] == "agent-llm":
+        from evals import agent_llm
+
+        return agent_llm.main(argv[1:])
     parser = argparse.ArgumentParser(prog="python -m evals")
     sub = parser.add_subparsers(dest="command", required=True)
     run_p = sub.add_parser("run")

@@ -8,14 +8,16 @@ export function GenUI({
   decide,
   busy,
   clarify,
+  canDecide,
 }: {
   run: Run;
   decide: (approve: boolean) => void;
   busy: boolean;
   clarify?: (message: string) => void;
+  canDecide?: boolean;
 }) {
   return (
-    <GenUIContext.Provider value={{ run, decide, busy, clarify }}>
+    <GenUIContext.Provider value={{ run, decide, busy, clarify, canDecide }}>
       {componentsFor(run).map((c) => {
         const Component = COMPONENT_REGISTRY[c.component];
         return Component ? <Component key={c.id} data={c.props} /> : null;

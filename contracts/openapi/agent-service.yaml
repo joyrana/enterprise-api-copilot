@@ -32,6 +32,8 @@ paths:
   /internal/v1/runs:
     post:
       operationId: startRun
+      parameters:
+        - {name: mode, in: query, schema: {type: string, enum: [sync, async], default: sync}}
       requestBody:
         required: true
         content:
@@ -54,6 +56,32 @@ paths:
               schema: {$ref: "./platform-api.yaml#/components/schemas/Run"}
         "404": {$ref: "#/components/responses/Error"}
         "401": {$ref: "#/components/responses/Error"}
+        "202":
+          description: Accepted (mode=async); the run is RUNNING
+          content:
+            application/json:
+              schema: {$ref: "./platform-api.yaml#/components/schemas/Run"}
+        "429":
+          description: The model queue is full
+          headers:
+            Retry-After: {schema: {type: integer, minimum: 1}}
+          content:
+            application/json:
+              schema: {$ref: "./platform-api.yaml#/components/schemas/ApiError"}
+  /internal/v1/runs/{runId}/events:
+    get:
+      operationId: streamAgentRunEvents
+      parameters:
+        - {name: runId, in: path, required: true, schema: {type: string, pattern: "^run_[0-9a-f]{16}$"}}
+        - {name: Last-Event-ID, in: header, schema: {type: integer, minimum: 0}}
+      responses:
+        "401": {$ref: "#/components/responses/Error"}
+        "200":
+          description: Server-Sent Events, as in the platform API
+          content:
+            text/event-stream:
+              schema: {type: string}
+        "404": {$ref: "#/components/responses/Error"}
   /internal/v1/runs/{runId}:
     get:
       operationId: getAgentRun

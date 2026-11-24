@@ -1,0 +1,21 @@
+{
+ "case": "l-014",
+ "provider": "mlx",
+ "model": "mlx-community/Qwen3-4B-Instruct-2507-4bit",
+ "recorded_at": "2026-11-24T03:49:08.818018+00:00",
+ "prompt_versions": [
+  "intent=intent-v3",
+  "plan=planner-v3",
+  "respond=responder-v2"
+ ],
+ "latency_ms": 18166.3,
+ "outputs": [
+  "{\n  \"intent\": \"troubleshooting\",\n  \"confidence\": 1,\n  \"rationale\": \"The request asks about a 403 error during a refund operation, indicating a permission or authorization issue.\",\n  \"entities\": {\n    \"operation_hint\": \"refund a payment\",\n    \"status_codes\": [403]\n  }\n}",
+  "{\"thought\": \"Find operation to refund a payment\", \"action\": \"call\", \"skill_id\": \"api.search\", \"arguments\": {\"query\": \"refund a payment\"}}",
+  "{\"thought\": \"Determine why refund is blocked by checking the refund operation's authentication and scopes.\", \"action\": \"call\", \"skill_id\": \"api.describe\", \"arguments\": {\"operation_id\": \"refundPayment\"}}",
+  "{\"thought\": \"Determine if the token lacks the required refunds:write scope.\", \"action\": \"call\", \"skill_id\": \"token.inspect\", \"arguments\": {\"token\": \"$JWT\"}}",
+  "{\"thought\": \"Determine missing scopes causing 403 error during refund\", \"action\": \"call\", \"skill_id\": \"token.inspect\", \"arguments\": {\"token\": \"$JWT\"}}",
+  "{\"thought\": \"Determine missing scopes causing 403 error during refund\", \"action\": \"call\", \"skill_id\": \"token.inspect\", \"arguments\": {\"token\": \"$JWT\"}}",
+  "{\n  \"message\": \"A 403 error when refunding a payment occurs because the API token lacks the required `refunds:write` scope. The refund operation requires this scope to be granted in the OAuth 2.0 token.\",\n  \"components\": [\n    {\n      \"component\": \"operation_detail\",\n      \"source\": \"describe\"\n    }\n  ]\n}"
+ ]
+}

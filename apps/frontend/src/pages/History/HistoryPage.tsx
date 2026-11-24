@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Clock, RefreshCw } from 'lucide-react';
 import { ApiError, type Run, type RunStatus } from '@/api/client';
 import { platform, getToken } from '@/api/session';
+import { GenUI } from '@/components/genui/GenUI';
 
 const STATUSES: RunStatus[] = [
   'AWAITING_APPROVAL',
@@ -34,6 +35,9 @@ export function HistoryPage() {
   const [status, setStatus] = useState<RunStatus | ''>('');
   const [load, setLoad] = useState<Load>({ state: 'idle' });
   const [selected, setSelected] = useState<Run | null>(null);
+  const [roles, setRoles] = useState<string[]>([]);
+  const [busy, setBusy] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   const refresh = async () => {
     if (!getToken()) {
@@ -49,6 +53,39 @@ export function HistoryPage() {
           ? `${err.code} (HTTP ${err.status}): ${err.message}`
           : 'Could not load runs';
       setLoad({ state: 'error', message });
+    }
+  };
+
+  useEffect(() => {
+    if (getToken()) {
+      platform
+        .me()
+        .then((me) => setRoles(me.roles))
+        .catch(() => setRoles([]));
+    }
+  }, []);
+
+  const replace = (updated: Run) => {
+    setSelected(updated);
+    setLoad((prev) =>
+      prev.state === 'ready'
+        ? {
+            state: 'ready',
+            runs: prev.runs.map((r) => (r.run_id === updated.run_id ? updated : r)),
+          }
+        : prev
+    );
+  };
+
+  const act = async (action: () => Promise<Run>) => {
+    setBusy(true);
+    setActionError(null);
+    try {
+      replace(await action());
+    } catch (err) {
+      setActionError(err instanceof ApiError ? `${err.code}: ${err.message}` : 'Action failed');
+    } finally {
+      setBusy(false);
     }
   };
 
@@ -141,12 +178,26 @@ export function HistoryPage() {
             {selected.run_id} · {selected.status}
           </h2>
           <p className="whitespace-pre-wrap text-sm text-gray-200">{selected.message}</p>
-          {selected.pending_approval && (
-            <p className="text-sm text-amber-300">
-              Pending: {selected.pending_approval.summary} (hash{' '}
-              {selected.pending_approval.action_hash.slice(0, 12)}…)
+          {actionError && (
+            <p role="alert" className="text-sm text-red-300">
+              {actionError}
             </p>
           )}
+          <GenUI
+            run={selected}
+            busy={busy}
+            canDecide={roles.includes('approver') || roles.includes('admin')}
+            decide={(approve) => {
+              const pending = selected.pending_approval;
+              if (!pending) return;
+              void act(() =>
+                approve
+                  ? platform.approveRun(selected.run_id, pending.action_hash)
+                  : platform.rejectRun(selected.run_id, 'rejected in history view')
+              );
+            }}
+            clarify={(answer) => void act(() => platform.clarifyRun(selected.run_id, answer))}
+          />
           <h3 className="text-sm font-medium text-gray-300 pt-2">Timeline</h3>
           <ol className="text-sm text-gray-400 list-decimal pl-5">
             {selected.timeline.map((event, i) => (

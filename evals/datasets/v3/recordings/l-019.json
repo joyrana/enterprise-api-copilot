@@ -1,0 +1,21 @@
+{
+ "case": "l-019",
+ "provider": "mlx",
+ "model": "mlx-community/Qwen3-4B-Instruct-2507-4bit",
+ "recorded_at": "2026-11-24T03:50:48.400448+00:00",
+ "prompt_versions": [
+  "intent=intent-v3",
+  "plan=planner-v3",
+  "respond=responder-v2"
+ ],
+ "latency_ms": 24410.0,
+ "outputs": [
+  "{\n  \"intent\": \"api_execution\",\n  \"confidence\": 0.98,\n  \"rationale\": \"The request asks to retrieve a specific payment by ID, indicating a fetch operation.\",\n  \"entities\": {\n    \"payment_id\": \"pay_acm00000001\",\n    \"customer_id\": null,\n    \"order_id\": null,\n    \"amount_minor\": null,\n    \"currency\": null,\n    \"status_codes\": [],\n    \"languages\": [],\n    \"status_filter\": null,\n    \"refund_reason\": null,\n    \"operation_hint\": \"get a payment\"\n  }\n}",
+  "{\"thought\": \"Find the operation to get a payment by ID\", \"action\": \"call\", \"skill_id\": \"api.search\", \"arguments\": {\"query\": \"get payment by id\"}}",
+  "{\"thought\": \"Find the payment with ID pay_acm00000001 using the getPayment operation.\", \"action\": \"call\", \"skill_id\": \"api.call.read\", \"arguments\": {\"operation_id\": \"getPayment\", \"path_params\": {\"payment_id\": \"pay_acm00000001\"}}}",
+  "{\"thought\": \"Describe the getPayment operation to understand its parameters and behavior.\", \"action\": \"call\", \"skill_id\": \"api.describe\", \"arguments\": {\"operation_id\": \"getPayment\"}}",
+  "{\"thought\": \"Retrieve payment with id pay_acm00000001 using the getPayment operation.\", \"action\": \"call\", \"skill_id\": \"api.call.read\", \"arguments\": {\"operation_id\": \"getPayment\", \"path_params\": {\"payment_id\": \"pay_acm00000001\"}}}",
+  "{\"thought\": \"Payment details for pay_acm00000001 are already retrieved.\", \"action\": \"finish\"}",
+  "{\n  \"message\": \"Payment with ID `pay_acm00000001` was successfully retrieved. Status: authorized, amount: ₹500.00 (50000 paise), currency: INR.\",\n  \"components\": [\n    {\n      \"component\": \"api_response\",\n      \"source\": \"call\"\n    },\n    {\n      \"component\": \"code_snippets\",\n      \"source\": \"call\"\n    }\n  ]\n}"
+ ]
+}

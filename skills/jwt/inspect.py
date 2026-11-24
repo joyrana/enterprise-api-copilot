@@ -142,6 +142,8 @@ def build_jwt_skill(*, clock: Any = None) -> SkillDefinition[InspectInput, Inspe
         handler=inspect,
         required_permissions=frozenset({TOKEN_INSPECT}),
         side_effect=SideEffect.NONE,
+        intents=frozenset({"troubleshooting", "token_inspection"}),
+        order=80,
         timeout_s=2,
         error_codes=frozenset({SkillErrorCode.INVALID_INPUT}),
     )

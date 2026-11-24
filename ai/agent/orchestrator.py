@@ -66,6 +66,8 @@ from ai.models.base import (
     ModelUsage,
     StructuredOutputError,
 )
+from ai.models.limiter import ModelBusyError
+from ai.models.observe import drain_queue_wait, llm_scope
 from ai.telemetry import Telemetry
 from skills.runtime.contracts import InvocationContext, Principal, SkillResult
 from skills.runtime.errors import SkillErrorCode
@@ -236,7 +238,9 @@ class Orchestrator:
         self.budget = budget or (RunBudget(deadline_s=240) if llm is not None else RunBudget())
         self.telemetry = telemetry or Telemetry()
 
-    async def run(
+    # The public entry points open an observation scope: every model call inside becomes an
+    # ``llm.generate`` span under the run span and a ``model_call`` run event (G7).
+    def new_state(
         self,
         query: str,
         *,
@@ -245,6 +249,7 @@ class Orchestrator:
         conversation_id: str | None = None,
         context: ConversationContext | None = None,
     ) -> RunState:
+        """A RUNNING state with its id, so a caller can hand the id out before the run ends."""
         state = RunState(
             run_id=f"run_{uuid.uuid4().hex[:16]}",
             query=query,
@@ -258,14 +263,83 @@ class Orchestrator:
         )
         if self.llm is not None:
             state.model_usage = ModelUsageTotals(provider=self.llm.name, model=self.llm.model)
+        state.mode = "agentic" if self.step_planner is not None else "deterministic"
+        return state
+
+    def check_admission(self) -> None:
+        """Raise ``ModelBusyError`` when the model queue would refuse a new run."""
+        limiter = getattr(self.llm, "limiter", None)
+        if limiter is not None:
+            limiter.check_admission()
+
+    async def run(
+        self,
+        query: str,
+        *,
+        principal: Principal,
+        environment: str,
+        conversation_id: str | None = None,
+        context: ConversationContext | None = None,
+        state: RunState | None = None,
+    ) -> RunState:
+        with llm_scope(self.telemetry, principal.tenant_id) as calls:
+            state = await self._run(
+                query,
+                principal=principal,
+                environment=environment,
+                conversation_id=conversation_id,
+                context=context,
+                state=state,
+            )
+        return self._record_model_calls(state, calls)
+
+    async def resume(self, run_id: str, *, approval_token: str) -> RunState:
+        with llm_scope(self.telemetry, self._tenant_of(run_id)) as calls:
+            state = await self._resume(run_id, approval_token=approval_token)
+        return self._record_model_calls(state, calls)
+
+    async def clarify(self, run_id: str, message: str) -> RunState:
+        with llm_scope(self.telemetry, self._tenant_of(run_id)) as calls:
+            state = await self._clarify(run_id, message)
+        return self._record_model_calls(state, calls)
+
+    def _tenant_of(self, run_id: str) -> str:
+        known = self.checkpoints.load(run_id)
+        return known.principal.tenant_id if known else "-"
+
+    def _record_model_calls(self, state: RunState, calls: list[dict[str, Any]]) -> RunState:
+        if calls:
+            state.events.extend(RunEvent(kind="model_call", detail=c) for c in calls)
+            self.checkpoints.save(state)
+        return state
+
+    async def _run(
+        self,
+        query: str,
+        *,
+        principal: Principal,
+        environment: str,
+        conversation_id: str | None = None,
+        context: ConversationContext | None = None,
+        state: RunState | None = None,
+    ) -> RunState:
+        if state is None:
+            state = self.new_state(
+                query,
+                principal=principal,
+                environment=environment,
+                conversation_id=conversation_id,
+                context=context,
+            )
         with self.telemetry.span("agent.run", **{"copilot.run_id": state.run_id}) as span:
             agentic = self.step_planner is not None
-            state.mode = "agentic" if agentic else "deterministic"
             try:
                 if isinstance(self.classifier, LLMIntentClassifier):
                     state.intent = await self.classifier.aclassify(query, context)
                 else:
                     state.intent = await self.classifier.aclassify(query)
+            except ModelBusyError:
+                raise  # not admitted: the API answers 429 and no run is created
             except _MODEL_ERRORS as exc:
                 try:
                     self._model_failed(state, "intent", exc)
@@ -288,6 +362,7 @@ class Orchestrator:
                     },
                 )
             )
+            self.checkpoints.save(state)  # progress is visible to GET /runs/{id} and SSE
             span.set("copilot.intent", state.intent.intent.value)
             mentioned = state.intent.entities.environment
             if mentioned and mentioned != environment:
@@ -336,7 +411,7 @@ class Orchestrator:
             span.set("copilot.tool_calls", state.tool_calls)
         return state
 
-    async def resume(self, run_id: str, *, approval_token: str) -> RunState:
+    async def _resume(self, run_id: str, *, approval_token: str) -> RunState:
         state = self.checkpoints.load(run_id)
         if state is None:
             raise KeyError(f"unknown run {run_id}")
@@ -360,7 +435,7 @@ class Orchestrator:
         self.checkpoints.save(state)
         return state
 
-    async def clarify(self, run_id: str, message: str) -> RunState:
+    async def _clarify(self, run_id: str, message: str) -> RunState:
         """Continue a run that stopped on missing values, using the user's answer.
 
         The answer becomes an extra grounding source for this run only; the blocked call
@@ -403,6 +478,12 @@ class Orchestrator:
     # ── model accounting ────────────────────────────────────────────────────
     def _account(self, state: RunState, usage: ModelUsage | None, *, failed: bool = False) -> None:
         totals = state.model_usage
+        waited = drain_queue_wait()
+        if waited:
+            # Time queued for a model slot is not the run's execution time.
+            state.started_at += waited
+            if totals is not None:
+                totals.queue_wait_s = round(totals.queue_wait_s + waited, 3)
         if totals is None:
             return
         if usage is not None:
@@ -485,6 +566,7 @@ class Orchestrator:
             if d.id in state.allowed_skills
         ]
         decisions = rejections = 0
+        rejected_by_skill: dict[str, int] = {}
         try:
             while True:
                 self._check_budget(state)
@@ -521,12 +603,24 @@ class Orchestrator:
                     planned, problem = self._validate_decision(state, decision)
                     if planned is None:
                         rejections += 1
+                        rejected_by_skill[decision.skill_id] = (
+                            rejected_by_skill.get(decision.skill_id, 0) + 1
+                        )
+                        if rejected_by_skill[decision.skill_id] == 2:
+                            # Rejected twice: stop offering it for the rest of this run.
+                            skills = [d for d in skills if d.id != decision.skill_id]
+                            state.events.append(
+                                RunEvent(
+                                    kind="skill_withdrawn", detail={"skill_id": decision.skill_id}
+                                )
+                            )
                         state.events.append(
                             RunEvent(
                                 kind="plan_rejected",
                                 detail={"skill_id": decision.skill_id, "reason": problem},
                             )
                         )
+                        self.checkpoints.save(state)
                         continue
                     state.plan.steps.append(planned)
                     state.events.append(
@@ -540,6 +634,7 @@ class Orchestrator:
                         )
                     )
                     step = planned
+                    self.checkpoints.save(state)
                 token = (
                     approval_token
                     if state.pending_approval and state.pending_approval.step_id == step.step_id

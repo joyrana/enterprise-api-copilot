@@ -1,0 +1,62 @@
+name: LLM agent evaluation (live model)
+
+# Runs the agent_llm suite against a real mlx-lm server on an Apple Silicon runner, records
+# the report and fails on any safety violation or on a metric regressing beyond the
+# thresholds in evals/agent_llm.py (documented in docs/evaluation/README.md).
+# Nightly and on demand; PR CI only replays recorded outputs (python-ci.yml).
+
+on:
+  schedule:
+    - cron: "43 2 * * *" # nightly 02:43 UTC
+  workflow_dispatch:
+    inputs:
+      model:
+        description: "mlx-lm model id (default: the repository default)"
+        required: false
+        default: "mlx-community/Qwen3-4B-Instruct-2507-4bit"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: evals-live
+  cancel-in-progress: false
+
+jobs:
+  live:
+    runs-on: macos-14 # Apple Silicon (arm64); mlx needs it
+    timeout-minutes: 90
+    env:
+      MODEL: ${{ inputs.model || 'mlx-community/Qwen3-4B-Instruct-2507-4bit' }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.13"
+          cache: pip
+      - name: Install
+        run: |
+          pip install -e ".[dev]"
+          pip install "mlx-lm==0.29.1"
+      - name: Start the model server
+        run: |
+          nohup mlx_lm.server --model "$MODEL" --port 8000 > mlx.log 2>&1 &
+          for i in $(seq 1 120); do
+            curl -sf http://127.0.0.1:8000/v1/models >/dev/null && exit 0
+            sleep 5
+          done
+          echo "model server did not become ready" >&2
+          cat mlx.log >&2
+          exit 1
+      - name: Live evaluation
+        run: >-
+          python -m evals agent-llm --live --model "$MODEL"
+          --baseline docs/evaluation/agent_llm_baseline.json
+          --out evals/reports/agent-llm-live
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: agent-llm-live-${{ github.run_id }}
+          path: |
+            evals/reports/agent-llm-live/
+            mlx.log

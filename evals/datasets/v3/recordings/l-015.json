@@ -1,0 +1,21 @@
+{
+ "case": "l-015",
+ "provider": "mlx",
+ "model": "mlx-community/Qwen3-4B-Instruct-2507-4bit",
+ "recorded_at": "2026-11-24T03:49:31.558587+00:00",
+ "prompt_versions": [
+  "intent=intent-v3",
+  "plan=planner-v3",
+  "respond=responder-v2"
+ ],
+ "latency_ms": 22670.7,
+ "outputs": [
+  "{\n  \"intent\": \"troubleshooting\",\n  \"confidence\": 0.99,\n  \"rationale\": \"A 422 status code indicates a validation error in the request payload.\",\n  \"entities\": {\n    \"operation_hint\": \"create payment\",\n    \"status_codes\": [422]\n  }\n}",
+  "{\"thought\": \"Find the create payment operation to understand 422 error context\", \"action\": \"call\", \"skill_id\": \"api.search\", \"arguments\": {\"query\": \"create payment\"}}",
+  "{\"thought\": \"Determine meaning of 422 error for create payment operation\", \"action\": \"call\", \"skill_id\": \"docs.search\", \"arguments\": {\"query\": \"422 error in create payment operation\", \"mode\": \"keyword\", \"k\": 3}}",
+  "{\"thought\": \"Determine the meaning of 422 error in create payment operation\", \"action\": \"call\", \"skill_id\": \"docs.search\", \"arguments\": {\"query\": \"422 error in create payment operation\", \"mode\": \"keyword\", \"k\": 3}}",
+  "{\"thought\": \"Explain 422 error meaning in create payment context\", \"action\": \"call\", \"skill_id\": \"docs.search\", \"arguments\": {\"query\": \"422 error in create payment operation\", \"mode\": \"keyword\", \"k\": 3}}",
+  "{\"thought\": \"Determine the cause of 422 error in create payment operation\", \"action\": \"call\", \"skill_id\": \"docs.search\", \"arguments\": {\"query\": \"422 error in create payment operation\", \"mode\": \"keyword\", \"k\": 3}}",
+  "{\"message\":\"A 422 Unprocessable Entity error in the create payment operation indicates that the request body failed validation. Common causes include: an amount below the minimum of 100 paise (₹1), an unsupported currency, or a customer_id that does not match the cust_ prefix format. Ensure your request meets these criteria before retrying.\\n\\nFor example, if you're using INR, ensure the amount is at least 100 paise (₹1.00). Also, verify the customer ID format (e.g., cust_12345).\",\"components\":[{\"component\":\"doc_sources\",\"source\":\"docs\"}]}"
+ ]
+}

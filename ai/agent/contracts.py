@@ -112,6 +112,7 @@ class ModelUsageTotals(BaseModel):
     output_tokens: int = 0
     latency_ms: float = 0.0
     failures: int = 0  # model calls that were unreachable or returned invalid output
+    queue_wait_s: float = 0.0  # time spent waiting for a model slot (not part of the budget)
 
 
 class HistoryTurn(BaseModel):

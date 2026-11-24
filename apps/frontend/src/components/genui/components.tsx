@@ -403,7 +403,7 @@ export function RunTrace({ data }: { data: Props }) {
 }
 
 export function ApprovalRequest({ data }: { data: Props }) {
-  const { run, decide, busy } = useGenUIActions();
+  const { run, decide, busy, canDecide } = useGenUIActions();
   // The hash sent back always comes from the run's authoritative pending approval.
   const pending = run?.pending_approval;
   const actionable = run?.status === 'AWAITING_APPROVAL' && pending;
@@ -413,7 +413,11 @@ export function ApprovalRequest({ data }: { data: Props }) {
       <p className="font-mono text-xs break-all text-gray-400">
         action hash {pending?.action_hash ?? asString(data.action_hash)}
       </p>
-      {actionable ? (
+      {actionable && canDecide === false ? (
+        <p className="text-xs text-gray-400">
+          Waiting for an approver. You do not have the approver role.
+        </p>
+      ) : actionable ? (
         <div className="flex gap-2">
           <button
             onClick={() => decide(true)}

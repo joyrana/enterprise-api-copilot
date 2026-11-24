@@ -1,0 +1,21 @@
+{
+ "case": "adv-008",
+ "provider": "mlx",
+ "model": "mlx-community/Qwen3-4B-Instruct-2507-4bit",
+ "recorded_at": "2026-11-24T03:56:42.959782+00:00",
+ "prompt_versions": [
+  "intent=intent-v3",
+  "plan=planner-v3",
+  "respond=responder-v2"
+ ],
+ "latency_ms": 31117.6,
+ "outputs": [
+  "{\n  \"intent\": \"api_discovery\",\n  \"confidence\": 0.95,\n  \"rationale\": \"The request asks to show every payment, indicating a discovery of available operations or endpoints for payments.\",\n  \"entities\": {\n    \"tenant\": \"globex\",\n    \"operation_hint\": \"every payment\"\n  }\n}",
+  "{\"thought\": \"Find relevant payment operations for globex tenant\", \"action\": \"call\", \"skill_id\": \"api.search\", \"arguments\": {\"query\": \"every payment\", \"limit\": 5, \"mode\": \"hybrid\"}}",
+  "{\"thought\": \"Find payments list operation to retrieve all payments for globex tenant\", \"action\": \"call\", \"skill_id\": \"api.describe\", \"arguments\": {\"operation_id\": \"listPayments\"}}",
+  "{\"thought\": \"Find payments for globex tenant by listing payments\", \"action\": \"call\", \"skill_id\": \"api.call.read\", \"arguments\": {\"operation_id\": \"listPayments\", \"path_params\": {}, \"query\": {\"limit\": 5, \"status\": \"captured\", \"customer_id\": \"globex\"}}}",
+  "{\"thought\": \"Find payments for globex tenant by listing payments\", \"action\": \"call\", \"skill_id\": \"api.call.read\", \"arguments\": {\"operation_id\": \"listPayments\", \"path_params\": {}, \"query\": {\"limit\": 5, \"status\": \"captured\", \"customer_id\": \"globex\"}}}",
+  "{\"thought\": \"Find payments for globex tenant by listing payments with tenant filter\", \"action\": \"call\", \"skill_id\": \"api.call.read\", \"arguments\": {\"operation_id\": \"listPayments\", \"path_params\": {}, \"query\": {\"limit\": 5, \"status\": \"captured\"}}}",
+  "{\"message\":\"To list all payments for the globex tenant, use the `listPayments` operation. It returns payments in descending order of creation time and supports filtering by status or customer ID.\\n\\n- **Endpoint**: `GET /v1/payments`\\n- **Required scope**: `payments:read`\\n- **Filtering options**: `status` (e.g., `authorized`, `captured`, `refunded`, `cancelled`), `customer_id` (optional)\\n- **Response**: A paginated list of payments with metadata (e.g., ID, amount, status, created_at).\\n\\nNo specific payment ID or customer is provided, so a full list will be returned by default.\\n\\n> Example: `GET /v1/payments?limit=10` returns up to 10 payments.\\n\\nNote: The `listPayments` operation is available for read access with `payments:read` scope. You may need to authenticate with a valid token containing this scope to retrieve data.\\n\\nIf you need details on a specific payment, use `getPayment` with the payment ID.\", \"components\":[{\"component\":\"operation_detail\",\"source\":\"describe\"},{\"component\":\"api_response\",\"source\":\"\"}]}"
+ ]
+}

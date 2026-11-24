@@ -111,6 +111,17 @@ type Run struct {
 	PendingApproval *PendingApproval `json:"pending_approval"`
 	Timeline        []TimelineEvent  `json:"timeline"`
 	ConversationID  *string          `json:"conversation_id"`
+	Mode            string           `json:"mode,omitempty"`
+	UI              []UIComponent    `json:"ui,omitempty"`
+}
+
+// UIComponent mirrors the UIComponent schema: a component the agent chose, with props the
+// server built from real step output.
+type UIComponent struct {
+	ID        string         `json:"id"`
+	Component string         `json:"component"`
+	Source    *string        `json:"source"`
+	Props     map[string]any `json:"props"`
 }
 
 // Conversation mirrors the Conversation schema.

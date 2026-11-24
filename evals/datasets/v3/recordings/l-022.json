@@ -1,0 +1,22 @@
+{
+ "case": "l-022",
+ "provider": "mlx",
+ "model": "mlx-community/Qwen3-4B-Instruct-2507-4bit",
+ "recorded_at": "2026-11-24T03:51:57.695168+00:00",
+ "prompt_versions": [
+  "intent=intent-v3",
+  "plan=planner-v3"
+ ],
+ "latency_ms": 33195.7,
+ "outputs": [
+  "{\n  \"intent\": \"api_execution\",\n  \"confidence\": 0.99,\n  \"rationale\": \"The request explicitly asks to refund a specific payment by ID with a reason and amount.\",\n  \"entities\": {\n    \"payment_id\": \"pay_acm00000002\",\n    \"amount_minor\": 10000,\n    \"currency\": \"₹\",\n    \"refund_reason\": \"duplicate\",\n    \"operation_hint\": \"refund a payment\"\n  }\n}",
+  "{\"thought\": \"Find operation to refund a payment\", \"action\": \"call\", \"skill_id\": \"api.search\", \"arguments\": {\"query\": \"refund a payment\", \"limit\": 5}}",
+  "{\"thought\": \"Find details of the payment to refund\", \"action\": \"call\", \"skill_id\": \"api.call.read\", \"arguments\": {\"operation_id\": \"getPayment\", \"path_params\": {\"payment_id\": \"pay_acm00000002\"}}}",
+  "{\"thought\": \"Need to describe the getPayment operation to proceed with refund.\", \"action\": \"call\", \"skill_id\": \"api.describe\", \"arguments\": {\"operation_id\": \"getPayment\"}}",
+  "{\"thought\": \"Retrieve payment details to proceed with refund\", \"action\": \"call\", \"skill_id\": \"api.call.read\", \"arguments\": {\"operation_id\": \"getPayment\", \"path_params\": {\"payment_id\": \"pay_acm00000002\"}}}",
+  "{\"thought\": \"Find the refund operation to initiate a partial refund for the duplicate payment.\", \"action\": \"call\", \"skill_id\": \"api.search\", \"arguments\": {\"query\": \"refund a payment partially\", \"limit\": 5}}",
+  "{\"thought\": \"Need to initiate partial refund for duplicate payment\", \"action\": \"call\", \"skill_id\": \"api.call.write\", \"arguments\": {\"operation_id\": \"refundPayment\", \"path_params\": {\"payment_id\": \"pay_acm00000002\"}, \"body\": {\"amount\": 10000, \"reason\": \"duplicate\"}}}",
+  "{\"thought\": \"Need to describe the refundPayment operation before executing the refund.\", \"action\": \"call\", \"skill_id\": \"api.describe\", \"arguments\": {\"operation_id\": \"refundPayment\"}}",
+  "{\"thought\": \"Ready to refund payment with partial amount and reason\", \"action\": \"call\", \"skill_id\": \"api.call.write\", \"arguments\": {\"operation_id\": \"refundPayment\", \"path_params\": {\"payment_id\": \"pay_acm00000002\"}, \"body\": {\"amount\": 10000, \"reason\": \"duplicate\"}}}"
+ ]
+}

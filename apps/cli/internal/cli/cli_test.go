@@ -10,6 +10,8 @@ import (
 	"strings"
 	"sync"
 	"testing"
+
+	"github.com/joyrana/enterprise-api-copilot/apps/cli/internal/client"
 )
 
 const hash = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
@@ -219,5 +221,44 @@ func TestEvalRunValidatesSuite(t *testing.T) {
 	_, srv, cfg := setup(t)
 	if code, _, _ := run(t, srv, cfg, "", "eval", "run", "--suite", "rm -rf /"); code != ExitUsage {
 		t.Fatalf("expected usage error, got %d", code)
+	}
+}
+
+func TestRenderersCoverEveryComponent(t *testing.T) {
+	var out bytes.Buffer
+	a := &app{io: IO{Out: &out, Err: &out}}
+	pending := &client.PendingApproval{SkillID: "api.call.write", Environment: "sandbox", Summary: "POST /v1/payments", ActionHash: hash}
+	run := client.Run{RunID: "run_0123456789abcdef", Status: "AWAITING_APPROVAL", PendingApproval: pending, UI: []client.UIComponent{
+		{Component: "operation_list", Props: map[string]any{"operations": []any{map[string]any{"operation_id": "refundPayment", "method": "POST", "path": "/v1/p", "summary": "Refund", "scopes": []any{"refunds:write"}}}}},
+		{Component: "operation_detail", Props: map[string]any{"operation_id": "createPayment", "method": "POST", "path": "/v1/payments", "summary": "Create", "scopes": []any{"payments:write"}, "parameters": []any{map[string]any{"name": "Idempotency-Key", "location": "header", "required": true}}, "body_fields": []any{map[string]any{"name": "amount", "type": "integer", "required": true}}, "responses": map[string]any{"201": "created"}}},
+		{Component: "code_snippets", Props: map[string]any{"operation_id": "createPayment", "snippets": map[string]any{"curl": "curl -X POST"}, "notes": []any{"no credentials"}}},
+		{Component: "api_response", Props: map[string]any{"method": "POST", "path": "/v1/payments", "ok": true, "status_code": float64(201), "correlation_id": "c1", "response_body": map[string]any{"id": "pay_1"}, "curl": "curl ..."}},
+		{Component: "doc_sources", Props: map[string]any{"extract": "Min amount is 100.", "sources": []any{map[string]any{"title": "Guide", "source_id": "docs/g", "flagged": true}}}},
+		{Component: "jwt_report", Props: map[string]any{"algorithm": "HS256", "scopes": []any{"payments:read"}, "issues": []any{"token expired"}, "expired": true}},
+		{Component: "run_trace", Props: map[string]any{"steps": []any{map[string]any{"step_id": "search", "skill_id": "api.search", "ok": true, "purpose": "find"}}}},
+		{Component: "approval_request", Props: map[string]any{"summary": "stale copy", "action_hash": strings.Repeat("0", 64)}},
+		{Component: "clarification", Props: map[string]any{"missing_fields": []any{"body.amount", "body.currency"}}},
+		{Component: "hologram", Props: map[string]any{}},
+	}}
+	run.Status = "NEEDS_CLARIFICATION"
+	a.renderComponents(run)
+	text := out.String()
+	for _, want := range []string{
+		"== Matching operations ==", "refundPayment", "refunds:write",
+		"== createPayment ==", "Idempotency-Key", "amount", "201  created",
+		"--- curl ---", "note: no credentials",
+		"succeeded with HTTP 201", `"id": "pay_1"`, "Equivalent cURL",
+		"[flagged as suspicious]", "token expired", "== Steps taken ==",
+		"action hash: " + hash, "Missing: amount, currency", "copilot runs clarify run_0123456789abcdef",
+	} {
+		if !strings.Contains(text, want) {
+			t.Errorf("output missing %q:\n%s", want, text)
+		}
+	}
+	if strings.Contains(text, strings.Repeat("0", 64)) {
+		t.Error("the component's stale action hash was shown instead of the run's pending approval")
+	}
+	if strings.Contains(text, "hologram") {
+		t.Error("unknown components must be skipped silently")
 	}
 }

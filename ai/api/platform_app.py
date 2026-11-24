@@ -27,6 +27,7 @@ from ai.agent.orchestrator import CheckpointStore, InMemoryCheckpointStore, Orch
 from ai.api.auth import TokenAuthority
 from ai.api.http import ApiProblemError, endpoint, json, parse_body
 from ai.api.runs import RunService, RunView
+from ai.api.sse import stream_run
 from ai.bootstrap import Services
 from skills.runtime.approval_service import ApprovalService
 from skills.runtime.contracts import InvocationContext, Principal
@@ -215,8 +216,22 @@ def create_platform_app(services: Services, config: PlatformConfig | None = None
     async def create_run(request: Request, principal: Principal | None) -> Response:
         p = assert_principal(principal)
         body = await parse_body(request, _RunCreate)
+        mode = request.query_params.get("mode", "sync")
+        if mode not in ("sync", "async"):
+            raise ApiProblemError(400, "VALIDATION_ERROR", "mode must be sync or async")
+        if mode == "async":
+            started = await runs.start_async(p, body.query, body.environment, body.conversation_id)
+            return _run_json(RunView.of(started), 202)
         state = await runs.start(p, body.query, body.environment, body.conversation_id)
         return _run_json(RunView.of(state), 201)
+
+    async def run_events(request: Request, principal: Principal | None) -> Response:
+        p = assert_principal(principal)
+        run_id = request.path_params["run_id"]
+        return stream_run(
+            lambda: runs.get(run_id, p.tenant_id),
+            last_event_id=request.headers.get("last-event-id"),
+        )
 
     async def list_runs(request: Request, principal: Principal | None) -> Response:
         p = assert_principal(principal)
@@ -293,6 +308,7 @@ def create_platform_app(services: Services, config: PlatformConfig | None = None
             Route("/api/v1/runs", endpoint(list_runs, **secured), methods=["GET"]),
             Route("/api/v1/runs/{run_id}", endpoint(get_run, **secured), methods=["GET"]),
             Route("/api/v1/runs/{run_id}/approve", endpoint(approve, **secured), methods=["POST"]),
+            Route("/api/v1/runs/{run_id}/events", endpoint(run_events, **secured), methods=["GET"]),
             Route("/api/v1/runs/{run_id}/clarify", endpoint(clarify, **secured), methods=["POST"]),
             Route(
                 "/api/v1/conversations", endpoint(create_conversation, **secured), methods=["POST"]

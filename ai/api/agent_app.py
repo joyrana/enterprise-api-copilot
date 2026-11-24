@@ -16,9 +16,10 @@ from starlette.routing import Route
 
 from ai.agent.orchestrator import CheckpointStore, Orchestrator
 from ai.api.auth import TokenAuthority
-from ai.api.http import endpoint, json, parse_body
+from ai.api.http import ApiProblemError, endpoint, json, parse_body
 from ai.api.platform_app import assert_principal
 from ai.api.runs import RunService, RunView
+from ai.api.sse import stream_run
 from ai.bootstrap import Services
 from skills.runtime.contracts import Principal
 
@@ -67,11 +68,21 @@ def create_agent_app(
     async def start(request: Request, principal: Principal | None) -> Response:
         p = assert_principal(principal)
         body = await parse_body(request, _Start)
-        return json(
-            RunView.of(
-                await runs.start(p, body.query, body.environment, body.conversation_id)
-            ).model_dump(mode="json"),
-            201,
+        mode = request.query_params.get("mode", "sync")
+        if mode not in ("sync", "async"):
+            raise ApiProblemError(400, "VALIDATION_ERROR", "mode must be sync or async")
+        if mode == "async":
+            started = await runs.start_async(p, body.query, body.environment, body.conversation_id)
+            return json(RunView.of(started).model_dump(mode="json"), 202)
+        state = await runs.start(p, body.query, body.environment, body.conversation_id)
+        return json(RunView.of(state).model_dump(mode="json"), 201)
+
+    async def events(request: Request, principal: Principal | None) -> Response:
+        p = assert_principal(principal)
+        run_id = request.path_params["run_id"]
+        return stream_run(
+            lambda: runs.get(run_id, p.tenant_id),
+            last_event_id=request.headers.get("last-event-id"),
         )
 
     async def get(request: Request, principal: Principal | None) -> Response:
@@ -100,6 +111,11 @@ def create_agent_app(
             Route("/internal/v1/runs", endpoint(start, authority=authority), methods=["POST"]),
             Route(
                 "/internal/v1/runs/{run_id}", endpoint(get, authority=authority), methods=["GET"]
+            ),
+            Route(
+                "/internal/v1/runs/{run_id}/events",
+                endpoint(events, authority=authority),
+                methods=["GET"],
             ),
             Route(
                 "/internal/v1/runs/{run_id}/clarify",

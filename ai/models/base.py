@@ -16,6 +16,7 @@ from typing import Any, Protocol, TypeVar
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
+from ai.models.observe import observe_call
 from skills.runtime.redaction import mask_jwts, redact_text
 
 T = TypeVar("T", bound=BaseModel)
@@ -85,14 +86,24 @@ def sanitize_request(request: ModelRequest) -> ModelRequest:
 
 
 def _extract_json(text: str) -> str:
-    text = text.strip()
-    if text.startswith("```"):
-        text = text.strip("`")
-        text = text.split("\n", 1)[1] if "\n" in text else text
-    start, end = text.find("{"), text.rfind("}")
-    if start == -1 or end < start:
-        raise StructuredOutputError("no JSON object in model output")
-    return text[start : end + 1]
+    """The first complete JSON object in ``text``.
+
+    Tolerates code fences (with or without a language tag), prose before the object and
+    trailing prose after it (which may itself contain braces), by decoding from each ``{``
+    until one parses instead of slicing to the last ``}``.
+    """
+    decoder = json.JSONDecoder()
+    start = text.find("{")
+    while start != -1:
+        try:
+            value, end = decoder.raw_decode(text, start)
+        except ValueError:
+            start = text.find("{", start + 1)
+            continue
+        if isinstance(value, dict):
+            return text[start:end]
+        start = text.find("{", start + 1)
+    raise StructuredOutputError("no JSON object in model output")
 
 
 def inline_schema(schema: dict[str, Any]) -> dict[str, Any]:
@@ -132,23 +143,45 @@ async def generate_structured(
     request = request.model_copy(update={"json_schema": sent})
     attempt = request
     for remaining in range(repairs, -1, -1):
-        response = await provider.generate(sanitize_request(attempt))
-        try:
-            parsed = schema.model_validate(json.loads(_extract_json(response.text)))
-        except (ValueError, ValidationError) as exc:
-            if remaining == 0:
-                raise StructuredOutputError(
-                    f"model output does not match {schema.__name__}"
-                ) from exc
-            problem = str(exc).splitlines()[0][:300]
-            attempt = request.model_copy(
-                update={
-                    "user": f"{request.user}\n\nYour previous reply was invalid ({problem}). "
-                    "Reply with only the JSON object."
-                }
-            )
-            continue
-        return parsed, response
+        number = repairs - remaining + 1
+        sent_request = sanitize_request(attempt)
+        with observe_call(request.task, request.prompt_version, number) as obs:
+            try:
+                response = await provider.generate(sent_request)
+            except ModelUnavailableError:
+                obs.finish("unavailable", provider=provider.name, model=provider.model)
+                raise
+            facts = {
+                "provider": response.provider,
+                "model": response.model,
+                "input_tokens": response.usage.input_tokens,
+                "output_tokens": response.usage.output_tokens,
+                "latency_ms": response.usage.latency_ms or None,
+                "request_text": sent_request.system
+                + "\n"
+                + sent_request.untrusted_context
+                + "\n"
+                + sent_request.user,
+                "response_text": response.text,
+            }
+            try:
+                parsed = schema.model_validate(json.loads(_extract_json(response.text)))
+            except (ValueError, ValidationError) as exc:
+                obs.finish("invalid_json", **facts)  # type: ignore[arg-type]
+                if remaining == 0:
+                    raise StructuredOutputError(
+                        f"model output does not match {schema.__name__}"
+                    ) from exc
+                problem = str(exc).splitlines()[0][:300]
+                attempt = request.model_copy(
+                    update={
+                        "user": f"{request.user}\n\nYour previous reply was invalid ({problem}). "
+                        "Reply with only the JSON object."
+                    }
+                )
+                continue
+            obs.finish("repaired" if number > 1 else "ok", **facts)  # type: ignore[arg-type]
+            return parsed, response
     raise AssertionError("unreachable")  # pragma: no cover
 
 

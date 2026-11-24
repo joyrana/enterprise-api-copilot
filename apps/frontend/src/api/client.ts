@@ -6,6 +6,10 @@
  * actually happened instead of a fabricated result.
  */
 
+import { readEventStream, type RunProgressEvent } from './sse';
+
+export type { RunProgressEvent } from './sse';
+
 export type RunStatus =
   'RUNNING' | 'AWAITING_APPROVAL' | 'NEEDS_CLARIFICATION' | 'COMPLETED' | 'REJECTED' | 'FAILED';
 
@@ -119,15 +123,18 @@ export interface ApiErrorBody {
 
 export class ApiError extends Error {
   readonly status: number;
+  /** Seconds to wait before retrying (429 MODEL_BUSY). */
+  readonly retryAfterS: number | null;
   readonly code: string;
   readonly requestId: string;
 
-  constructor(status: number, body: ApiErrorBody) {
+  constructor(status: number, body: ApiErrorBody, retryAfterS: number | null = null) {
     super(`${body.code}: ${body.message}`);
     this.name = 'ApiError';
     this.status = status;
     this.code = body.code;
     this.requestId = body.requestId;
+    this.retryAfterS = retryAfterS;
   }
 }
 
@@ -186,7 +193,8 @@ export function createClient(options: ClientOptions = {}) {
           requestId: response.headers.get('X-Request-Id') ?? '',
         };
       }
-      throw new ApiError(response.status, parsed);
+      const retry = Number.parseInt(response.headers.get('Retry-After') ?? '', 10);
+      throw new ApiError(response.status, parsed, Number.isNaN(retry) ? null : retry);
     }
     return (text ? JSON.parse(text) : undefined) as T;
   }
@@ -222,6 +230,37 @@ export function createClient(options: ClientOptions = {}) {
         environment,
         ...(conversationId ? { conversation_id: conversationId } : {}),
       });
+    },
+    /** Starts the run in the background (202, status RUNNING); follow it with `streamRun`. */
+    createRunAsync: (query: string, environment = 'sandbox', conversationId?: string) => {
+      if (conversationId !== undefined && !CONVERSATION_ID.test(conversationId)) {
+        throw new Error(`invalid conversation id: ${conversationId}`);
+      }
+      return request<Run>(
+        'POST',
+        '/api/v1/runs',
+        {
+          query,
+          environment,
+          ...(conversationId ? { conversation_id: conversationId } : {}),
+        },
+        { mode: 'async' }
+      );
+    },
+    /** Resolves when the server closes the stream (the run finished or paused). */
+    streamRun: (
+      runId: string,
+      onEvent: (event: RunProgressEvent) => void,
+      streamOptions: { signal?: AbortSignal; lastEventId?: number } = {}
+    ) => {
+      assertRunId(runId);
+      const token = options.getToken?.() ?? null;
+      return readEventStream(
+        `${baseUrl}/api/v1/runs/${runId}/events`,
+        token ? { Authorization: `Bearer ${token}` } : {},
+        onEvent,
+        { fetchImpl: doFetch, ...streamOptions }
+      );
     },
     createConversation: () => request<Conversation>('POST', '/api/v1/conversations'),
     getConversation: (conversationId: string) => {

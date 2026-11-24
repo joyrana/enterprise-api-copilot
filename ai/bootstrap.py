@@ -17,6 +17,8 @@ Configuration is read from environment variables (see ``.env.example``):
 ``COPILOT_LLM_MODEL``        model (default ``mlx-community/Qwen3-4B-Instruct-2507-4bit`` for mlx)
 ``COPILOT_LLM_BASE_URL``     provider URL (default ``http://127.0.0.1:8000``, ``mlx_lm.server``)
 ``COPILOT_LLM_TIMEOUT_S``    per-call timeout in seconds (default 120)
+``COPILOT_LLM_CONCURRENCY``  model calls in flight at once (default 1, right for mlx-lm)
+``COPILOT_LLM_QUEUE_MAX``    runs allowed to wait for the model before new runs get 429 (default 8)
 
 ``Settings()`` built in code (tests, evaluations) defaults to ``llm_provider="none"`` so
 they stay deterministic; ``Settings.from_env()`` defaults to the local mlx-lm server.
@@ -34,6 +36,7 @@ from urllib.parse import urlsplit
 import httpx
 from pydantic import BaseModel, Field, SecretStr
 
+from ai.agent.resolver import IntentResolver
 from ai.knowledge.documents import PUBLIC_TENANT
 from ai.knowledge.ingest import Ingestor, read_markdown_tree
 from ai.knowledge.openapi import load_spec
@@ -41,6 +44,7 @@ from ai.knowledge.retrieval import Embedder, HashingEmbedder, KnowledgeIndex, LS
 from ai.knowledge.text import tokenize, tokenize_stemmed
 from ai.models.base import ModelProvider
 from ai.models.factory import build_provider
+from ai.models.limiter import FairLimiter, LimitedProvider
 from ai.storage.sql_store import SqlRuntimeStore
 from ai.telemetry import SpanRecorder, Telemetry
 from skills.api.catalog import ApiCatalog
@@ -84,6 +88,9 @@ class Settings(BaseModel):
     llm_model: str | None = None
     llm_base_url: str | None = None
     llm_timeout_s: float = 120.0
+    # mlx_lm.server handles one request at a time; more concurrent calls only queue inside it.
+    llm_concurrency: int = 1
+    llm_queue_max: int = 8
 
     @classmethod
     def from_env(cls, env: Mapping[str, str] | None = None) -> Settings:
@@ -122,6 +129,8 @@ class Settings(BaseModel):
             llm_model=env.get("COPILOT_LLM_MODEL") or None,
             llm_base_url=env.get("COPILOT_LLM_BASE_URL") or None,
             llm_timeout_s=float(env.get("COPILOT_LLM_TIMEOUT_S") or 120),
+            llm_concurrency=int(env.get("COPILOT_LLM_CONCURRENCY") or 1),
+            llm_queue_max=int(env.get("COPILOT_LLM_QUEUE_MAX") or 8),
         )
 
 
@@ -169,6 +178,19 @@ def _signing_key(settings: Settings) -> bytes:
     if settings.runtime_mode in {"local", "test"}:
         return secrets.token_bytes(32)
     raise RuntimeError("COPILOT_APPROVAL_KEY is required outside local/test mode")
+
+
+def _limited(settings: Settings) -> ModelProvider | None:
+    """The configured provider behind the concurrency limiter (injected providers are not)."""
+    provider = build_provider(
+        settings.llm_provider,
+        model=settings.llm_model,
+        base_url=settings.llm_base_url,
+        timeout_s=settings.llm_timeout_s,
+    )
+    if provider is None:
+        return None
+    return LimitedProvider(provider, FairLimiter(settings.llm_concurrency, settings.llm_queue_max))
 
 
 def build_services(
@@ -226,6 +248,7 @@ def build_services(
     registry.register(build_jwt_skill())
     registry.register(build_docs_skill(knowledge))
 
+    IntentResolver(registry).validate()  # every actionable intent must have skills
     signer = ApprovalSigner(_signing_key(settings))
     audit_sink = audit or (
         InMemoryAuditSink() if settings.runtime_mode == "test" else LoggingAuditSink()
@@ -254,11 +277,5 @@ def build_services(
         audit=audit_sink,
         telemetry=telemetry,
         state=state,
-        llm=llm
-        or build_provider(
-            settings.llm_provider,
-            model=settings.llm_model,
-            base_url=settings.llm_base_url,
-            timeout_s=settings.llm_timeout_s,
-        ),
+        llm=llm or _limited(settings),
     )

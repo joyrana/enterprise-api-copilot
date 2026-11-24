@@ -1,0 +1,22 @@
+{
+ "case": "l-012",
+ "provider": "mlx",
+ "model": "mlx-community/Qwen3-4B-Instruct-2507-4bit",
+ "recorded_at": "2026-11-24T03:48:37.473242+00:00",
+ "prompt_versions": [
+  "intent=intent-v3",
+  "plan=planner-v3",
+  "respond=responder-v2"
+ ],
+ "latency_ms": 30657.8,
+ "outputs": [
+  "{\n  \"intent\": \"api_explanation\",\n  \"confidence\": 0.98,\n  \"rationale\": \"The request asks how idempotency works in the context of payments, indicating a need to explain operational behavior.\",\n  \"entities\": {\n    \"payment_id\": null,\n    \"customer_id\": null,\n    \"order_id\": null,\n    \"amount_minor\": null,\n    \"currency\": null,\n    \"status_codes\": [],\n    \"languages\": [],\n    \"status_filter\": null,\n    \"refund_reason\": null,\n    \"operation_hint\": \"payments\"\n  }\n}",
+  "{\"thought\": \"Find payment-related operation to explain idempotency\", \"action\": \"call\", \"skill_id\": \"api.search\", \"arguments\": {\"query\": \"payments\", \"limit\": 5, \"mode\": \"hybrid\"}}",
+  "{\"thought\": \"Find details on idempotency for payments\", \"action\": \"call\", \"skill_id\": \"api.describe\", \"arguments\": {\"operation_id\": \"listPayments\"}}",
+  "{\"thought\": \"Investigate how idempotency works for payments by describing the relevant operation.\", \"action\": \"call\", \"skill_id\": \"api.describe\", \"arguments\": {\"operation_id\": \"createPayment\"}}",
+  "{\"thought\": \"Explain idempotency behavior for payments using the createPayment operation details\", \"action\": \"call\", \"skill_id\": \"api.describe\", \"arguments\": {\"operation_id\": \"createPayment\"}}",
+  "{\"thought\": \"Explain idempotency mechanism for payments\", \"action\": \"call\", \"skill_id\": \"api.describe\", \"arguments\": {\"operation_id\": \"createPayment\"}}",
+  "{\"thought\": \"Explain idempotency mechanism for payments\", \"action\": \"call\", \"skill_id\": \"api.describe\", \"arguments\": {\"operation_id\": \"createPayment\"}}",
+  "{\"message\":\"Idempotency in payments ensures that identical requests produce the same result, even if repeated. For payment creation, an `Idempotency-Key` header must be included in the request. If the same key is used with the same request body, the system returns the original payment without processing a duplicate. This prevents duplicate charges and ensures consistency. The `createPayment` operation requires this header and validates it to avoid duplicates.\\n\\nExample: A payment of ₹1,250.00 (125000 paise) in INR with currency `INR` and customer ID `cust_123` will be processed only once, even if the request is retried, as long as the `Idempotency-Key` is unchanged.\\n\\nTo use idempotency:\\n- Include `Idempotency-Key` in the `POST /v1/payments` request.\\n- Use the same key across retries with the same request body.\\n- If the key is reused with a different body, a 409 error is returned.\\n\\nThis behavior is defined in the `createPayment` operation contract. The `createPayment` operation requires `payments:write` scope and supports idempotency via the `Idempotency-Key` header. The request body must include `amount`, `currency`, and `customer_id` fields, with `amount` in the smallest currency unit (e.g., 125000 for ₹1,250.00).\",\"components\":[{\"component\":\"operation_detail\",\"source\":\"describe_2\"}]}"
+ ]
+}

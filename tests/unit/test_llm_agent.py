@@ -291,6 +291,7 @@ async def test_mlx_provider_sends_openai_compatible_request() -> None:
     seen: dict[str, Any] = {}
 
     def handler(request: httpx.Request) -> httpx.Response:
+        seen.clear()  # keep only the latest request (the first call is the probe)
         seen["url"] = str(request.url)
         seen.update(json.loads(request.content))
         return httpx.Response(
@@ -324,7 +325,8 @@ async def test_mlx_provider_sends_openai_compatible_request() -> None:
     assert seen["url"] == "http://127.0.0.1:8000/v1/chat/completions"
     assert seen["model"] == "mlx-community/Qwen3-4B-Instruct-2507-4bit" and seen["stream"] is False
     assert seen["chat_template_kwargs"] == {"enable_thinking": False}
-    assert seen["response_format"]["json_schema"]["schema"] == {"type": "object"}
+    # The server answered the probe with prose, so it ignores response_format: not sent.
+    assert provider.honours_response_format is False and "response_format" not in seen
     system, user = seen["messages"][0]["content"], seen["messages"][1]["content"]
     assert system.startswith("trusted") and '{"type":"object"}' in system
     assert "<untrusted_context>" in user and user.endswith("question")
@@ -332,6 +334,37 @@ async def test_mlx_provider_sends_openai_compatible_request() -> None:
     failing = MLXServerProvider(transport=httpx.MockTransport(lambda r: httpx.Response(500)))
     with pytest.raises(ModelUnavailableError):
         await failing.generate(ModelRequest(task="t", system="s", user="u", prompt_version="v"))
+
+
+async def test_response_format_is_used_when_the_server_honours_it() -> None:
+    bodies: list[dict[str, Any]] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        body = json.loads(request.content)
+        bodies.append(body)
+        enforced = "zq-constrained" in json.dumps(body.get("response_format", {}))
+        content = '{"answer": "zq-constrained"}' if enforced else "{}"
+        return httpx.Response(200, json={"choices": [{"message": {"content": content}}]})
+
+    provider = MLXServerProvider(transport=httpx.MockTransport(handler))
+    request = ModelRequest(
+        task="plan", system="s", user="u", prompt_version="v", json_schema={"type": "object"}
+    )
+    await provider.generate(request)
+    await provider.generate(request)
+    assert provider.honours_response_format is True
+    assert len(bodies) == 3, "one probe, then two real calls"
+    assert "response_format" in bodies[1] and "response_format" in bodies[2]
+
+
+async def test_json_is_extracted_from_fences_and_trailing_prose() -> None:
+    from ai.models.base import _extract_json
+
+    assert json.loads(_extract_json('```json\n{"a": 1}\n```')) == {"a": 1}
+    assert json.loads(_extract_json('Sure! {"a": {"b": 2}} hope that {helps}')) == {"a": {"b": 2}}
+    assert json.loads(_extract_json('x {not json} then {"ok": true}')) == {"ok": True}
+    with pytest.raises(Exception, match="no JSON object"):
+        _extract_json("nothing here {")
 
 
 async def test_malformed_json_is_repaired_once() -> None:
@@ -409,3 +442,31 @@ async def test_model_failure_before_any_write_still_fails() -> None:
     assert state.status is RunStatus.FAILED
     assert not any(e.kind == "summary_unavailable" for e in state.events)
     assert len(h.app.state.sandbox.tenant("acme").payments) == 3
+
+
+async def test_a_skill_rejected_twice_is_no_longer_offered() -> None:
+    h = build_harness()
+    llm = ScriptedModelProvider(
+        [
+            intent("api_execution"),
+            call("api.call.read", operation_id="listPayments"),  # no describe yet: rejected
+            call("api.call.read", operation_id="listPayments"),  # rejected again -> withdrawn
+            call("api.search", query="list payments"),
+            FINISH,
+            reply("done"),
+        ]
+    )
+    state = await Orchestrator(h.services.runtime, llm=llm).run(
+        "list my payments", principal=DEV, environment="sandbox"
+    )
+    withdrawn = [e.detail["skill_id"] for e in state.events if e.kind == "skill_withdrawn"]
+    assert withdrawn == ["api.call.read"]
+
+    def offered(request: ModelRequest) -> list[str]:
+        assert request.json_schema is not None
+        return list(request.json_schema["properties"]["skill_id"]["enum"])  # type: ignore[index]
+
+    plan_requests = [r for r in llm.requests if r.task == "plan"]
+    assert "api.call.read" in offered(plan_requests[1])
+    assert "api.call.read" not in offered(plan_requests[2])
+    assert 'api.describe with operation_id "listPayments"' in plan_requests[2].user  # the hint

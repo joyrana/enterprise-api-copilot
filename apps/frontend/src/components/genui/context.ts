@@ -8,6 +8,8 @@ export interface GenUIActions {
   busy: boolean;
   /** Answers a NEEDS_CLARIFICATION run; absent where the page cannot (e.g. history). */
   clarify?: (message: string) => void;
+  /** False when the viewer cannot approve (not an approver): the panel shows the action only. */
+  canDecide?: boolean;
 }
 
 export const GenUIContext = createContext<GenUIActions>({

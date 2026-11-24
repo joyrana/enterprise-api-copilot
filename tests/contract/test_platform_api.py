@@ -340,6 +340,74 @@ def test_conversations_and_clarification(env: tuple[TestClient, Harness]) -> Non
     )
 
 
+def test_async_run_and_event_stream(env: tuple[TestClient, Harness]) -> None:
+    client, _ = env
+    alice, gina = login(client, "alice"), login(client, "gina")
+    headers = {"Authorization": f"Bearer {alice}"}
+    accepted = call(
+        client,
+        "POST",
+        "/api/v1/runs",
+        alice,
+        params={"mode": "async"},
+        json={"query": "which API lists customers?"},
+    )
+    assert accepted.status_code == 202
+    run_id = accepted.json()["run_id"]
+    assert (
+        call(
+            client, "POST", "/api/v1/runs", alice, params={"mode": "bogus"}, json={"query": "x"}
+        ).status_code
+        == 400
+    )
+
+    def stream(token_headers: dict[str, str], **extra: str) -> httpx.Response:
+        with client.stream(
+            "GET", f"/api/v1/runs/{run_id}/events", headers={**token_headers, **extra}
+        ) as r:
+            r.read()
+        return CONTRACT.check(r)
+
+    full = stream(headers)
+    assert full.status_code == 200 and full.headers["content-type"].startswith("text/event-stream")
+    names = [ln.split(": ", 1)[1] for ln in full.text.splitlines() if ln.startswith("event: ")]
+    assert names[0] == "created" and "intent" in names and names[-1] == "status"
+    assert '"status": "COMPLETED"' in full.text
+    after_two = stream(headers, **{"Last-Event-ID": "2"})
+    assert after_two.text.startswith("id: 3\n") and after_two.text.endswith("\n\n")
+    assert len(after_two.text.split("\n\n")) == len(full.text.split("\n\n")) - 2
+    assert call(client, "GET", f"/api/v1/runs/{run_id}", alice).json()["status"] == "COMPLETED"
+    foreign = stream({"Authorization": f"Bearer {gina}"})
+    assert foreign.status_code == 404
+
+
+def test_full_model_queue_is_429_with_retry_after() -> None:
+    from ai.models.base import ScriptedModelProvider
+    from ai.models.limiter import FairLimiter, LimitedProvider
+
+    h = build_harness()
+    limiter = FairLimiter(concurrency=1, max_queue=0, typical_call_s=5)
+    limiter._active = 1  # the model is occupied by someone else
+    h.services.llm = LimitedProvider(ScriptedModelProvider([]), limiter)
+    app = create_platform_app(
+        h.services, PlatformConfig(token_key=KEY, run_store=InMemoryCheckpointStore())
+    )
+    with TestClient(app) as client:
+        token = login(client, "alice")
+        for mode in ("sync", "async"):
+            busy = call(
+                client,
+                "POST",
+                "/api/v1/runs",
+                token,
+                params={"mode": mode},
+                json={"query": "which API lists customers?"},
+            )
+            assert busy.status_code == 429 and busy.json()["code"] == "MODEL_BUSY"
+            assert int(busy.headers["Retry-After"]) >= 5
+        assert call(client, "GET", "/api/v1/runs", token).json()["runs"] == []
+
+
 def test_tenant_isolation(env: tuple[TestClient, Harness]) -> None:
     client, _ = env
     alice, gina = login(client, "alice"), login(client, "gina")

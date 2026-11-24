@@ -1,0 +1,18 @@
+{
+ "case": "l-003",
+ "provider": "mlx",
+ "model": "mlx-community/Qwen3-4B-Instruct-2507-4bit",
+ "recorded_at": "2026-11-24T03:43:39.778705+00:00",
+ "prompt_versions": [
+  "intent=intent-v3",
+  "plan=planner-v3",
+  "respond=responder-v2"
+ ],
+ "latency_ms": 8961.8,
+ "outputs": [
+  "{\n  \"intent\": \"api_discovery\",\n  \"confidence\": 0.99,\n  \"rationale\": \"The request directly asks for the existence of an API to list customers.\",\n  \"entities\": {\n    \"operation_hint\": \"list customers\"\n  }\n}",
+  "{\"thought\": \"Discover available operations related to listing customers.\", \"action\": \"call\", \"skill_id\": \"api.search\", \"arguments\": {\"query\": \"list customers\", \"limit\": 5, \"mode\": \"hybrid\"}}",
+  "{\"thought\": \"Confirmed: list customers API exists in search results.\", \"action\": \"finish\"}",
+  "{\"message\":\"Yes, there is an API to list customers. Use the `GET /v1/customers` endpoint to list customers.\\n\\n### Key details:\\n- **Operation**: `listCustomers`\\n- **Method**: `GET`\\n- **Path**: `/v1/customers`\\n- **Summary**: List customers\\n- **Scopes required**: `customers:read`\",\"components\":[{\"component\":\"operation_list\",\"source\":\"search\"}]}"
+ ]
+}

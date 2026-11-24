@@ -19,6 +19,9 @@ class SkillRegistry:
     def get(self, skill_id: str) -> SkillDefinition[Any, Any] | None:
         return self._skills.get(skill_id)
 
+    def definitions(self) -> list[SkillDefinition[Any, Any]]:
+        return [self._skills[i] for i in self.ids()]
+
     def ids(self) -> list[str]:
         return sorted(self._skills)
 
