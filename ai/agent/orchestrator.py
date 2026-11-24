@@ -50,9 +50,17 @@ from ai.agent.contracts import (
     RunEvent,
     RunState,
     RunStatus,
+    active_seconds,
+    exclude_wait,
+    start_segment,
 )
 from ai.agent.conversations import ConversationContext
-from ai.agent.grounding import collect_api_values, ground_call_arguments
+from ai.agent.grounding import (
+    collect_api_values,
+    ground_call_arguments,
+    mask_reply_tokens,
+    ungrounded_reply_tokens,
+)
 from ai.agent.intent import IntentClassifier, RuleBasedIntentClassifier, extract_entities
 from ai.agent.intent_llm import LLMIntentClassifier
 from ai.agent.planner import BIND_SKILL, CALL_SKILLS, Planner, TemplatePlanner
@@ -261,6 +269,7 @@ class Orchestrator:
             history=context.turns if context else [],
             prior_user_texts=context.user_texts if context else [],
         )
+        start_segment(state)
         if self.llm is not None:
             state.model_usage = ModelUsageTotals(provider=self.llm.name, model=self.llm.model)
         state.mode = "agentic" if self.step_planner is not None else "deterministic"
@@ -426,7 +435,7 @@ class Orchestrator:
         state.settled = False
         # Time spent waiting for a human is not part of the run's execution budget.
         waited = round(time.time() - state.paused_at, 3) if state.paused_at else None
-        state.started_at = time.time() - state.elapsed_s
+        start_segment(state)
         state.events.append(
             RunEvent(
                 kind="resumed",
@@ -461,7 +470,7 @@ class Orchestrator:
         state.status = RunStatus.RUNNING
         state.settled = False
         state.missing_fields = []
-        state.started_at = time.time() - state.elapsed_s
+        start_segment(state)
         state.events.append(
             RunEvent(kind="clarified", detail={"message": redact_text(message)[:200]})
         )
@@ -488,7 +497,7 @@ class Orchestrator:
         waited = drain_queue_wait()
         if waited:
             # Time queued for a model slot is not the run's execution time.
-            state.started_at += waited
+            exclude_wait(state, waited)
             if totals is not None:
                 totals.queue_wait_s = round(totals.queue_wait_s + waited, 3)
         if totals is None:
@@ -576,11 +585,24 @@ class Orchestrator:
         rejected_by_skill: dict[str, int] = {}
         try:
             while True:
-                self._check_budget(state)
+                if state.cursor >= len(state.plan.steps):
+                    spent = self._budget_spent(state)
+                    if spent is not None:
+                        # Out of budget for *more* steps, but real steps already ran (a
+                        # write may have executed): answer from them instead of failing,
+                        # which would hide the result and invite a duplicate retry.
+                        state.events.append(
+                            RunEvent(kind="budget_reached", detail={"budget": spent})
+                        )
+                        break
+                    self._check_budget(state)
+                elif active_seconds(state) > state.budget.deadline_s:
+                    # A resumed, approved step already counted its tool call when it paused.
+                    raise RunHaltError(RunStatus.FAILED, "run deadline exceeded")
                 if state.cursor < len(state.plan.steps):
                     step = state.plan.steps[state.cursor]  # resumed after approval
                 else:
-                    if len(state.plan.steps) >= state.budget.max_steps:
+                    if sum(not s.auto for s in state.plan.steps) >= state.budget.max_steps:
                         state.events.append(RunEvent(kind="step_budget_reached"))
                         break
                     if decisions >= state.budget.max_steps + 2 or rejections >= 3:
@@ -599,7 +621,22 @@ class Orchestrator:
                         decisions += 1
                         try:
                             decision = await self.step_planner.next_step(state, skills)
-                        except _MODEL_ERRORS as exc:
+                        except StructuredOutputError as exc:
+                            if not any(r.ok for r in state.results.values()):
+                                self._model_failed(state, "plan", exc)
+                            # Unusable planner output (even after the repair retry) once real
+                            # steps have run: stop planning and let the model answer from
+                            # what it has, instead of discarding the run. An unreachable
+                            # model still fails the run (no rules fallback).
+                            self._account(state, None, failed=True)
+                            state.events.append(
+                                RunEvent(
+                                    kind="plan_unusable",
+                                    detail={"error": f"{type(exc).__name__}: {exc}"},
+                                )
+                            )
+                            break
+                        except ModelUnavailableError as exc:
                             self._model_failed(state, "plan", exc)
                         self._account(state, self.step_planner.last_usage)
                     if decision.action == "finish":
@@ -607,6 +644,7 @@ class Orchestrator:
                             RunEvent(kind="plan_finish", detail={"thought": decision.thought[:300]})
                         )
                         break
+                    await self._describe_first(state, decision)
                     planned, problem = self._validate_decision(state, decision)
                     if planned is None:
                         rejections += 1
@@ -650,7 +688,7 @@ class Orchestrator:
                 state.pending_approval = None
                 result = await self._run_step(state, step, token, recoverable=True)
                 if result is None:  # paused for approval
-                    state.elapsed_s = round(time.time() - state.started_at, 4)
+                    state.elapsed_s = round(active_seconds(state), 4)
                     state.paused_at = time.time()
                     self.checkpoints.save(state)
                     return
@@ -738,8 +776,14 @@ class Orchestrator:
             provenance = grounded.provenance
         for step in state.plan.steps if state.plan else []:
             done = state.results.get(step.step_id)
-            if step.skill_id == skill_id and step.arguments == arguments and done and done.ok:
-                return None, f"{skill_id} already ran with these arguments as [{step.step_id}]"
+            if step.skill_id == skill_id and step.arguments == arguments and done:
+                if done.ok:
+                    return None, f"{skill_id} already ran with these arguments as [{step.step_id}]"
+                error = done.error.message if done.error else "an error"
+                return None, (
+                    f"{skill_id} already failed with these arguments as [{step.step_id}] "
+                    f"({error}); change the arguments or finish"
+                )
         step_id = self._step_id(state, skill_id)
         if skill_id in CALL_SKILLS:
             state.resolved_skills[step_id] = skill_id
@@ -754,6 +798,59 @@ class Orchestrator:
             ),
             "",
         )
+
+    @staticmethod
+    def _reply_evidence(state: RunState, draft: str) -> str:
+        """What a reply may cite: user text, successful step output, the server draft."""
+        outputs = [
+            json.dumps(r.output, default=str)
+            for r in state.results.values()
+            if r.ok and r.output is not None
+        ]
+        history = [t.model_dump_json() for t in state.history]
+        return "\n".join([Orchestrator._grounding_text(state), draft, *outputs, *history])
+
+    async def _describe_first(self, state: RunState, decision: StepDecision) -> None:
+        """Run the ``api.describe`` a proposed call needs, instead of rejecting the call.
+
+        Small models often skip it. Describing is read-only, the operation id comes from
+        the proposal, and the call is still validated against the described contract,
+        so the describe-before-call invariant holds without a wasted model turn.
+        """
+        if (
+            decision.action != "call"
+            or decision.skill_id not in CALL_SKILLS
+            or decision.skill_id not in state.allowed_skills
+            or "api.describe" not in state.allowed_skills
+            or state.plan is None
+            # Room for the describe *and* the call it enables.
+            or state.tool_calls >= state.budget.max_tool_calls - 1
+        ):
+            return
+        operation_id = decision.arguments.get("operation_id")
+        if not isinstance(operation_id, str) or not operation_id:
+            return
+        if self._described(state, operation_id) is not None:
+            return
+        step = PlanStep(
+            step_id=self._step_id(state, "api.describe"),
+            skill_id="api.describe",
+            arguments={"operation_id": operation_id},
+            purpose=f"describe {operation_id} before calling it (orchestrator)",
+            auto=True,
+        )
+        state.plan.steps.append(step)
+        state.events.append(
+            RunEvent(
+                kind="plan_step",
+                detail={"step_id": step.step_id, "skill_id": step.skill_id, "auto": True},
+            )
+        )
+        result = await self._run_step(state, step, None, recoverable=True)
+        if result is not None:
+            state.results[step.step_id] = result
+            state.cursor += 1
+        self.checkpoints.save(state)
 
     @staticmethod
     def _grounding_text(state: RunState) -> str:
@@ -788,8 +885,30 @@ class Orchestrator:
             and not any(e.kind == "summary_unavailable" for e in state.events)
         ):
             try:
+                draft = state.message
                 message, choices = await self.responder.respond(state)
                 self._account(state, self.responder.last_usage)
+                evidence = self._reply_evidence(state, draft)
+                invented = ungrounded_reply_tokens(message, evidence)
+                if invented:
+                    # One corrective attempt, then mask what is still unsupported: the
+                    # reply may only state identifiers the run actually produced.
+                    message, choices = await self.responder.respond(
+                        state,
+                        feedback="it stated identifiers that appear nowhere in the "
+                        f"observations: {', '.join(invented)}. Use only identifiers from "
+                        "the observations, or omit them.",
+                    )
+                    self._account(state, self.responder.last_usage)
+                    invented = ungrounded_reply_tokens(message, evidence)
+                    if invented:
+                        message = mask_reply_tokens(message, invented)
+                    state.events.append(
+                        RunEvent(
+                            kind="reply_ungrounded",
+                            detail={"masked": invented, "retried": True},
+                        )
+                    )
                 if message:
                     state.message = message
             except _MODEL_ERRORS as exc:
@@ -826,7 +945,7 @@ class Orchestrator:
                 state.pending_approval = None
                 result = await self._run_step(state, step, token)
                 if result is None:  # paused (approval or clarification)
-                    state.elapsed_s = round(time.time() - state.started_at, 4)
+                    state.elapsed_s = round(active_seconds(state), 4)
                     state.paused_at = time.time()
                     self.checkpoints.save(state)
                     return
@@ -839,10 +958,20 @@ class Orchestrator:
             self._finish(state, failure.status, failure.message)
         self.checkpoints.save(state)
 
+    def _budget_spent(self, state: RunState) -> str | None:
+        """Which budget is used up, if any step already succeeded; otherwise None."""
+        if not any(r.ok for r in state.results.values()):
+            return None
+        if state.tool_calls >= state.budget.max_tool_calls:
+            return "tool_calls"
+        if active_seconds(state) > state.budget.deadline_s:
+            return "deadline"
+        return None
+
     def _check_budget(self, state: RunState) -> None:
         if state.tool_calls >= state.budget.max_tool_calls:
             raise RunHaltError(RunStatus.FAILED, "tool-call budget exhausted")
-        if time.time() - state.started_at > state.budget.deadline_s:
+        if active_seconds(state) > state.budget.deadline_s:
             raise RunHaltError(RunStatus.FAILED, "run deadline exceeded")
 
     def _resolve(self, value: Any, state: RunState) -> Any:
@@ -959,7 +1088,17 @@ class Orchestrator:
         self, state: RunState, skill_id: str, arguments: dict[str, Any], step_id: str = ""
     ) -> str:
         described = self._described(state, arguments.get("operation_id"))
-        target = f"{described['method']} {described['path']}" if described else skill_id
+        target = skill_id
+        if described:
+            # Show the concrete target: an approver must see *which* payment is refunded,
+            # not the path template.
+            path = str(described["path"])
+            for name, value in (arguments.get("path_params") or {}).items():
+                path = path.replace("{" + name + "}", str(redact_text(str(value))))
+            query = arguments.get("query") or {}
+            if query:
+                path += "?" + "&".join(f"{k}={redact(v)}" for k, v in sorted(query.items()))
+            target = f"{described['method']} {path}"
         body = (
             json.dumps(redact(arguments.get("body")), sort_keys=True)
             if arguments.get("body")
@@ -1116,5 +1255,5 @@ class Orchestrator:
     def _finish(state: RunState, status: RunStatus, message: str) -> RunState:
         state.status = status
         state.message = message
-        state.elapsed_s = round(time.time() - state.started_at, 4) if state.started_at else 0.0
+        state.elapsed_s = round(active_seconds(state), 4)
         return state

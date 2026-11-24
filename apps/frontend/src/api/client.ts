@@ -6,9 +6,9 @@
  * actually happened instead of a fabricated result.
  */
 
-import { readEventStream, type RunProgressEvent } from './sse';
+import { readEventStream, type RunProgressEvent } from './sse.ts';
 
-export type { RunProgressEvent } from './sse';
+export type { RunProgressEvent } from './sse.ts';
 
 export type RunStatus =
   'RUNNING' | 'AWAITING_APPROVAL' | 'NEEDS_CLARIFICATION' | 'COMPLETED' | 'REJECTED' | 'FAILED';

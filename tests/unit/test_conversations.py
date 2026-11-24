@@ -100,7 +100,7 @@ async def test_earlier_assistant_text_is_not_a_grounding_source() -> None:
             intent("docs_question"),
             call("docs.search", query="x"),
             FINISH,
-            reply("The id pay_acm00000009 is mentioned."),
+            reply("Payments are documented."),
             intent("api_execution", amount_minor=100),
             call("api.search", query="get a payment"),
             call("api.describe", operation_id="getPayment"),

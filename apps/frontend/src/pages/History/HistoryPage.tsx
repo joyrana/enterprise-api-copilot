@@ -36,6 +36,7 @@ export function HistoryPage() {
   const [load, setLoad] = useState<Load>({ state: 'idle' });
   const [selected, setSelected] = useState<Run | null>(null);
   const [roles, setRoles] = useState<string[]>([]);
+  const [subject, setSubject] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
 
@@ -60,7 +61,10 @@ export function HistoryPage() {
     if (getToken()) {
       platform
         .me()
-        .then((me) => setRoles(me.roles))
+        .then((me) => {
+          setRoles(me.roles);
+          setSubject(me.subject);
+        })
         .catch(() => setRoles([]));
     }
   }, []);
@@ -196,7 +200,12 @@ export function HistoryPage() {
                   : platform.rejectRun(selected.run_id, 'rejected in history view')
               );
             }}
-            clarify={(answer) => void act(() => platform.clarifyRun(selected.run_id, answer))}
+            // Only the requester may answer (the server returns 403 to anyone else).
+            clarify={
+              selected.requested_by === subject
+                ? (answer) => void act(() => platform.clarifyRun(selected.run_id, answer))
+                : undefined
+            }
           />
           <h3 className="text-sm font-medium text-gray-300 pt-2">Timeline</h3>
           <ol className="text-sm text-gray-400 list-decimal pl-5">

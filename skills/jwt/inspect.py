@@ -8,6 +8,9 @@ subject-like claims. The token itself and its signature are never returned.
 
 from __future__ import annotations
 
+import base64
+import binascii
+import json
 from datetime import UTC, datetime
 from typing import Any
 
@@ -61,6 +64,45 @@ def _iso(ts: Any) -> str | None:
     return None
 
 
+def _segment(part: str) -> dict[str, Any]:
+    """Decode one base64url JSON segment (header or claims)."""
+    data = base64.urlsafe_b64decode(part + "=" * (-len(part) % 4))
+    value = json.loads(data)
+    if not isinstance(value, dict):
+        raise ValueError("segment is not a JSON object")
+    return value
+
+
+def _decode_unverified(raw: str) -> tuple[dict[str, Any], dict[str, Any], list[str]]:
+    """Header, claims and any structural problem, without verifying anything.
+
+    PyJWT refuses a token whose *signature segment* is not valid base64url, even with
+    verification off. Inspection never verifies the signature, so a token pasted with a
+    truncated or corrupted signature is still decoded and the corruption is reported.
+    """
+    try:
+        header = jwt.get_unverified_header(raw)
+        claims: dict[str, Any] = jwt.decode(
+            raw, options={"verify_signature": False, "verify_exp": False, "verify_aud": False}
+        )
+        return header, claims, []
+    except jwt.PyJWTError as exc:
+        parts = raw.split(".")
+        if len(parts) != 3:
+            raise SkillError(SkillErrorCode.INVALID_INPUT, "value is not a decodable JWT") from exc
+        try:
+            header, claims = _segment(parts[0]), _segment(parts[1])
+        except (ValueError, binascii.Error) as inner:
+            raise SkillError(
+                SkillErrorCode.INVALID_INPUT, "value is not a decodable JWT"
+            ) from inner
+        return (
+            header,
+            claims,
+            ["signature segment is not valid base64url — the token was truncated or altered"],
+        )
+
+
 def build_jwt_skill(*, clock: Any = None) -> SkillDefinition[InspectInput, InspectOutput]:
     def now() -> float:
         return float(clock()) if clock else datetime.now(UTC).timestamp()
@@ -69,14 +111,7 @@ def build_jwt_skill(*, clock: Any = None) -> SkillDefinition[InspectInput, Inspe
         raw = inp.token.strip()
         if raw.lower().startswith("bearer "):
             raw = raw[7:].strip()
-        try:
-            header = jwt.get_unverified_header(raw)
-            claims: dict[str, Any] = jwt.decode(
-                raw, options={"verify_signature": False, "verify_exp": False, "verify_aud": False}
-            )
-        except jwt.PyJWTError as exc:
-            raise SkillError(SkillErrorCode.INVALID_INPUT, "value is not a decodable JWT") from exc
-        issues: list[str] = []
+        header, claims, issues = _decode_unverified(raw)
         alg = header.get("alg")
         if not alg or str(alg).lower() == "none":
             issues.append("unsigned token (alg 'none') — must be rejected by any API")

@@ -2,19 +2,19 @@
  "case": "l-007",
  "provider": "mlx",
  "model": "mlx-community/Qwen3-4B-Instruct-2507-4bit",
- "recorded_at": "2026-11-24T04:00:16.861510+00:00",
+ "recorded_at": "2026-11-24T10:59:26.065540+00:00",
  "prompt_versions": [
-  "intent=intent-v3",
-  "plan=planner-v4",
-  "respond=responder-v2"
+  "intent=intent-v4",
+  "plan=planner-v5",
+  "respond=responder-v3"
  ],
- "latency_ms": 12589.5,
+ "latency_ms": 17191.3,
  "outputs": [
-  "{\n  \"intent\": \"api_explanation\",\n  \"confidence\": 0.99,\n  \"rationale\": \"The request asks for parameters of the listOrders operation.\",\n  \"entities\": {\n    \"operation_hint\": \"listOrders\"\n  }\n}",
+  "{\n  \"intent\": \"api_explanation\",\n  \"confidence\": 0.99,\n  \"rationale\": \"The request asks for parameters of the listOrders operation, indicating a need to understand input requirements.\",\n  \"entities\": {\n    \"payment_id\": null,\n    \"customer_id\": null,\n    \"order_id\": null,\n    \"amount_minor\": null,\n    \"currency\": null,\n    \"status_codes\": [],\n    \"languages\": [],\n    \"status_filter\": null,\n    \"refund_reason\": null,\n    \"operation_hint\": \"listOrders\"\n  }\n}",
   "{\"thought\": \"Find the operation 'listOrders' to retrieve its parameters\", \"action\": \"call\", \"skill_id\": \"api.search\", \"arguments\": {\"query\": \"listOrders\"}}",
   "{\"thought\": \"Find parameters of listOrders operation\", \"action\": \"call\", \"skill_id\": \"api.describe\", \"arguments\": {\"operation_id\": \"listOrders\"}}",
   "{\"thought\": \"Retrieving parameters of listOrders via describe\", \"action\": \"call\", \"skill_id\": \"api.describe\", \"arguments\": {\"operation_id\": \"listOrders\"}}",
   "{\"thought\": \"Parameters of listOrders are already known from the describe call.\", \"action\": \"finish\"}",
-  "{\n  \"message\": \"The `listOrders` operation has one optional query parameter: `fulfilment_status`, which can take values: 'pending', 'shipped', 'delivered', or 'returned'.\",\n  \"components\": [\n    {\n      \"component\": \"operation_detail\",\n      \"source\": \"describe\"\n    }\n  ]\n}"
+  "{\"message\":\"The `listOrders` operation has a single optional query parameter: `fulfilment_status`, which can take values from the enum: `pending`, `shipped`, `delivered`, or `returned`.\\n\\n- **Parameter**: `fulfilment_status` (query, optional)\\n- **Values**: `pending`, `shipped`, `delivered`, `returned`\\n- **Default**: None (no default value)\\n- **Required**: No\\n- **Body**: Not required\\n- **Authentication**: OAuth 2.0 client credentials; token must carry `orders:read` scope\\n- **Response**: 200 OK with a list of orders\\n\\nExample: `GET /v2/orders?fulfilment_status=shipped`\",\n\"components\":[{\"component\":\"operation_detail\",\"source\":\"describe\"}]}"
  ]
 }

@@ -63,6 +63,35 @@ describe('HistoryPage renders past runs with the same components as chat', () =>
     expect(await screen.findByText(/No longer pending/)).toBeInTheDocument();
   });
 
+  it('offers the clarification answer only to the user who started the run', async () => {
+    const asking: Run = {
+      ...run,
+      status: 'NEEDS_CLARIFICATION',
+      pending_approval: null,
+      missing_fields: ['body.amount'],
+      ui: [
+        {
+          id: 'clarification',
+          component: 'clarification',
+          source: null,
+          props: { missing_fields: ['body.amount'] },
+        },
+      ],
+    };
+    platform.listRuns.mockResolvedValue([asking]);
+    platform.me.mockResolvedValue({ subject: 'vic', tenant_id: 'acme', roles: ['viewer'] });
+    const { unmount } = render(<HistoryPage />);
+    fireEvent.click(await screen.findByText('create a payment'));
+    expect(await screen.findByText(/More information needed/)).toBeInTheDocument();
+    expect(screen.queryByLabelText('Answer the question')).toBeNull();
+    unmount();
+
+    platform.me.mockResolvedValue({ subject: 'alice', tenant_id: 'acme', roles: ['developer'] });
+    render(<HistoryPage />);
+    fireEvent.click(await screen.findByText('create a payment'));
+    expect(await screen.findByLabelText('Answer the question')).toBeInTheDocument();
+  });
+
   it('shows no approval buttons for runs that are not pending', async () => {
     platform.me.mockResolvedValue({ subject: 'priya', tenant_id: 'acme', roles: ['approver'] });
     platform.listRuns.mockResolvedValue([{ ...run, status: 'COMPLETED', pending_approval: null }]);

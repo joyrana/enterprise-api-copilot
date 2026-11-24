@@ -26,7 +26,7 @@ from ai.models.base import ModelProvider, ModelRequest, ModelUsage, generate_str
 from skills.runtime.contracts import SkillDescriptor
 from skills.runtime.redaction import redact, redact_text
 
-PROMPT_VERSION = "planner-v4"
+PROMPT_VERSION = "planner-v5"
 JWT_PLACEHOLDER = "$JWT"
 _MAX_OBSERVATION_CHARS = 2400
 
@@ -222,7 +222,8 @@ def request_brief(state: RunState) -> str:
         f"Request: {redact_text(mask_jwt(state.query))}\n"
         f"Intent: {state.intent.intent.value if state.intent else 'unknown'}\n"
         f"Grounded entities: {json.dumps(ent)}\n"
-        f"Environment: {state.environment}"
+        f"Environment: {state.environment}\n"
+        f"Caller's tenant: {state.principal.tenant_id} (every record you see belongs to it)"
     )
 
 

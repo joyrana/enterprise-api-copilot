@@ -13,6 +13,40 @@ identity provider, no PostgreSQL run of the agent's `SqlRuntimeStore` tests
 (`COPILOT_TEST_PGURL` unset; the new conversation tables' PostgreSQL twin is therefore
 syntax-reviewed only).
 
+## PR review (session 5)
+
+The three stacked PRs were reviewed and run end to end locally (Python facade and Spring
+jar contract suites, PostgreSQL 18 integration tests, Go CLI system tests, Vitest + Node
+tests, the live stack against mlx-lm, and a live `agent_llm` re-record). Findings, all fixed:
+
+| # | Severity | Finding | Fix | Evidence |
+|---|---|---|---|---|
+| R1 | **Security** | A viewer could answer another user's clarification with their own values; the run kept the requester's permissions and paused for approval of that amount (confused deputy). Colleagues could read and post into another user's conversation | `clarify` is requester-only (403); conversations are private to their creator (404) | Reproduced through the API before the fix; contract `test_conversations_and_clarification` on both implementations; History only offers the answer box to the requester |
+| R2 | High | The approval summary showed the path template (`/v1/payments/{payment_id}/refunds`), so an approver could not see *which* payment | Summary shows the concrete path and query | `test_undescribed_calls_…` |
+| R3 | High | The run time budget used the wall clock: a sleep/wake or NTP step failed healthy runs with "run deadline exceeded" (found when a live eval ran across a sleep: 6 runs failed after 8–39 s) | Budget measured on a monotonic clock per segment | `test_a_wall_clock_jump_does_not_exhaust_the_run_budget` |
+| R4 | High | The reply could state identifiers no step produced (`pay_12345`, an invented request example) | Reply identifiers/operation names must appear in the run's evidence: one corrective retry, then `[unverified]` | `test_invented_identifiers_in_the_reply_are_retried_then_masked` |
+| R5 | Medium | `npm run test:node` (a CI job) failed: `client.ts` imported `./sse` without an extension | `./sse.ts` | `node --test` 4/4 |
+| R6 | Medium | The 4B model proposed calls before describing them; rejections withdrew the skill and multi-step tasks (G3) dead-ended | Orchestrator runs the needed `api.describe` (read-only), then validates the call | live: "Refund the latest captured payment for ₹100" now pauses for approval naming the id and its provenance |
+| R7 | Medium | Invalid component choices (source named by operation id) left the reply with no components | Map operation id → step; fall back to the default layout of real data | `test_invalid_component_choices_fall_back_to_real_data` |
+| R8 | Medium | `token.inspect` rejected a token whose signature segment was corrupt (PyJWT refuses it even unverified), and the planner retried the identical failing call four times | Header/claims still decoded with the corruption reported; identical failed calls are refused | `test_jwt_with_a_corrupted_signature_is_still_inspected`, `test_an_identical_call_that_already_failed_is_not_retried` |
+| R9 | Low | Unusable planner output after real progress failed the whole run | Planning stops and the model answers from what it has (`plan_unusable`); before any progress, and for an unreachable model, the run still fails | two `test_unusable_planner_output_…` tests |
+| R11 | High | Live: after an approved refund executed (HTTP 200), the run ended FAILED "tool-call budget exhausted", which hides the write and invites a duplicate retry; an approved step could also be refused because its paused attempt had already used the last tool call. The orchestrator's own describes also used up the model's step budget | Budgets reached after progress end planning and answer (`budget_reached`); an approved step runs; orchestrator steps count only against the tool-call budget | `test_a_write_that_uses_the_last_tool_call_still_completes`, `test_orchestrator_describes_do_not_use_the_models_step_budget`; live: refund → approval → HTTP 201 → COMPLETED |
+| R10 | Low | "Get payment <id>" flipped between execution and discovery on the 4B model | `intent-v4`: id-bearing get/show/fetch is execution (examples do not reuse eval wording) | live intent accuracy 0.917 → 0.944 |
+
+Live end to end on the local stack (platform → agent → mlx-lm): 15/16 checks then G3 after
+R11 — "Refund the latest captured payment for ₹100" paused with the concrete target and the id's
+provenance, was approved by an approver and created the refund (HTTP 201, COMPLETED). Viewer
+clarify → 403, colleague's conversation → 404, self-approval → 403, replay → 409, three
+concurrent runs completed. A run that spanned a 30-minute laptop sleep completed with
+`elapsed_s` 15 s (R3 working).
+
+Live `agent_llm` after the fixes ([report](../evaluation/agent_llm_review_live_report.md)):
+status and argument accuracy 1.0, intent 0.944, skill F1 0.915, model calls/run 5.14 → 4.75,
+repair rate 0.028 → 0, p95 31.5 s, safety violations 0; the replay baseline was rewritten from
+these recordings. **Open:** on `adv-008` ("every payment for the globex tenant") the 4B model
+still words the caller's own payments as globex's despite the responder rule (no data
+crosses tenants). pgvector is not installed locally, so its 4 SQL tests were not run.
+
 ## LLM-agent gaps (session 4)
 
 Branches: the work landed on `feat/agent-p0-security-correctness` (Phase 0),
@@ -26,7 +60,7 @@ Branches: the work landed on `feat/agent-p0-security-correctness` (Phase 0),
 | ADR-0011 | **Done** | `docs/adr/ADR-0011.md` | — |
 | G1 conversation memory | **Done** | SQL-backed (`V002`), tenant-scoped; scripted tests incl. "curl for it" and ₹200→₹150; **live**: "show me the curl for it" → `refundPayment`, and eval case `l-028` (₹150, payment id from the earlier turn) passes on the real model | — (the PostgreSQL twin of V002 is executed by `test_conversation_statements_are_tenant_scoped`) |
 | G2 resumable clarification | **Done** | `POST /runs/{id}/clarify` + plain next message routed; live: "Create a payment for cust_acm0001" → "₹500" → approval → HTTP 201, no model call to resume | The intent-level "too vague" clarification is not resumable (a new message in the conversation covers it) |
-| G3 grounding from API results | **Mechanism done, live end-to-end not demonstrated** | provenance in the event and approval summary; docs/failed calls never sources (`test_conversations`) | On "Refund the latest captured payment for ₹100" the 4B model lists payments correctly but does not finish the chain within its rejection budget (observed three times, two prompt variants). Not in the eval suite |
+| G3 grounding from API results | **Done** | provenance in the event and approval summary; docs/failed calls never sources (`test_conversations`); the orchestrator now runs the `api.describe` a proposed call needs instead of rejecting it, which is what stopped the 4B model; `test_llm_agent::test_undescribed_calls_are_described_first_and_ids_come_from_results` | Live result in the review section below |
 | G7 model observability | **Done** | `llm.generate` spans, `model_call` events with prompt versions, opt-in payload capture; `test_llm_tracing.py` | — |
 | G5 LLM evaluation | **Done** | `python -m evals agent-llm`, 36 cases / 8 adversarial, recordings + baselines in `docs/evaluation/` | Replay measures the code around the model, not the model; the committed live report predates one case's re-record (`l-027`) |
 | G15 CI with a real model | **Written, never run** | `.github/workflows/evals-live.yml` (macOS arm64, nightly + dispatch), replay step in `python-ci.yml` | Needs a push to verify; the `mlx-lm==0.29.1` pin and runner label are untested |

@@ -56,7 +56,7 @@ async def test_each_model_call_is_a_span_under_the_run_span() -> None:
     first = spans[0].attributes
     assert first["gen_ai.provider.name"] == "scripted"
     assert first["gen_ai.request.model"] == "scripted-1"
-    assert first["copilot.llm.prompt_version"] == "intent-v3"
+    assert first["copilot.llm.prompt_version"] == "intent-v4"
     assert first["copilot.llm.attempt"] == 1 and spans[1].attributes["copilot.llm.attempt"] == 2
     assert (
         isinstance(first["gen_ai.usage.input_tokens"], int)
@@ -73,10 +73,10 @@ async def test_prompt_versions_are_recorded_in_run_events() -> None:
     state = await _discovery(llm, recorder, "find an api")
     events = [e.detail for e in state.events if e.kind == "model_call"]  # type: ignore[attr-defined]
     assert [(e["stage"], e["prompt_version"], e["outcome"]) for e in events] == [
-        ("intent", "intent-v3", "ok"),
-        ("plan", "planner-v4", "ok"),
-        ("plan", "planner-v4", "ok"),
-        ("respond", "responder-v2", "ok"),
+        ("intent", "intent-v4", "ok"),
+        ("plan", "planner-v5", "ok"),
+        ("plan", "planner-v5", "ok"),
+        ("respond", "responder-v3", "ok"),
     ]
 
 

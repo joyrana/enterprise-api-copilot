@@ -15,7 +15,7 @@ import httpx
 import pytest
 import yaml
 
-from ai.agent.contracts import Intent, RunStatus
+from ai.agent.contracts import Intent, RunBudget, RunStatus
 from ai.agent.intent_llm import LLMIntentClassifier
 from ai.agent.orchestrator import FileCheckpointStore, Orchestrator
 from ai.agent.ui import REGISTRY
@@ -127,10 +127,9 @@ async def test_execution_is_validated_grounded_and_resumed_after_approval(tmp_pa
     llm = ScriptedModelProvider(
         [
             intent("api_execution", amount_minor=50000, currency="INR"),
-            call("api.call.write", operation_id="createPayment", body={}),  # no describe yet
-            call("api.search", query="create a payment"),
-            call("api.describe", operation_id="createPayment"),
-            call("api.call.read", operation_id="createPayment"),  # wrong invocation skill
+            # Not described yet: the orchestrator describes it, then refuses the wrong
+            # invocation skill.
+            call("api.call.read", operation_id="createPayment"),
             call(
                 "api.call.write",
                 operation_id="createPayment",
@@ -149,7 +148,10 @@ async def test_execution_is_validated_grounded_and_resumed_after_approval(tmp_pa
     assert '"amount": 50000' in summary and "cust_acm0001" in summary
     assert "cust_evil999" not in summary
     reasons = [e.detail["reason"] for e in state.events if e.kind == "plan_rejected"]
-    assert any("describe" in r for r in reasons) and any("api.call.write" in r for r in reasons)
+    assert any("must be invoked with api.call.write" in r for r in reasons)
+    auto = [e for e in state.events if e.kind == "plan_step" and e.detail.get("auto")]
+    assert [e.detail["skill_id"] for e in auto] == ["api.describe"]  # described exactly once
+    assert tool_skills(state)[0] == "api.describe"  # before any call
     grounded = next(e for e in state.events if e.kind == "arguments_grounded")
     assert "body.customer_id" in grounded.detail["dropped"]
     assert "body.amount" in grounded.detail["overridden"]
@@ -449,8 +451,9 @@ async def test_a_skill_rejected_twice_is_no_longer_offered() -> None:
     llm = ScriptedModelProvider(
         [
             intent("api_execution"),
-            call("api.call.read", operation_id="listPayments"),  # no describe yet: rejected
-            call("api.call.read", operation_id="listPayments"),  # rejected again -> withdrawn
+            # listPayments is a GET: api.call.write is the wrong invocation skill.
+            call("api.call.write", operation_id="listPayments"),  # rejected
+            call("api.call.write", operation_id="listPayments"),  # rejected again -> withdrawn
             call("api.search", query="list payments"),
             FINISH,
             reply("done"),
@@ -460,16 +463,15 @@ async def test_a_skill_rejected_twice_is_no_longer_offered() -> None:
         "list my payments", principal=DEV, environment="sandbox"
     )
     withdrawn = [e.detail["skill_id"] for e in state.events if e.kind == "skill_withdrawn"]
-    assert withdrawn == ["api.call.read"]
+    assert withdrawn == ["api.call.write"]
 
     def offered(request: ModelRequest) -> list[str]:
         assert request.json_schema is not None
         return list(request.json_schema["properties"]["skill_id"]["enum"])  # type: ignore[index]
 
     plan_requests = [r for r in llm.requests if r.task == "plan"]
-    assert "api.call.read" in offered(plan_requests[1])
-    assert "api.call.read" not in offered(plan_requests[2])
-    assert 'api.describe with operation_id "listPayments"' in plan_requests[2].user  # the hint
+    assert "api.call.write" in offered(plan_requests[1])
+    assert "api.call.write" not in offered(plan_requests[2])
 
 
 async def test_null_words_from_a_small_model_are_read_as_empty_not_invalid() -> None:
@@ -498,3 +500,265 @@ async def test_a_model_invented_value_in_a_tolerated_field_is_still_dropped() ->
     classifier = LLMIntentClassifier(llm)
     result = await classifier.aclassify("refund it")
     assert result.entities.payment_id is None and "payment_id" in classifier.dropped_entities
+
+
+async def test_undescribed_calls_are_described_first_and_ids_come_from_results() -> None:
+    """The live G3 failure: a small model calls before describing and needs an id it read."""
+    h = build_harness()
+    llm = ScriptedModelProvider(
+        [
+            intent("api_execution", amount_minor=10000, currency="INR"),
+            call("api.call.read", operation_id="listPayments", query={"status": "captured"}),
+            call(
+                "api.call.write",
+                operation_id="refundPayment",
+                path_params={"payment_id": "pay_acm00000002"},
+                body={"amount": 10000},
+            ),
+        ]
+    )
+    state = await Orchestrator(h.services.runtime, llm=llm).run(
+        "Refund the latest captured payment for ₹100", principal=DEV, environment="sandbox"
+    )
+    assert state.status is RunStatus.AWAITING_APPROVAL and state.pending_approval
+    assert tool_skills(state) == [
+        "api.describe",  # listPayments, by the orchestrator
+        "api.call.read",
+        "api.describe",  # refundPayment, by the orchestrator
+        "api.call.write",
+    ]
+    assert not [e for e in state.events if e.kind in ("plan_rejected", "skill_withdrawn")]
+    summary = state.pending_approval.summary
+    assert "pay_acm00000002" in summary and '"amount": 10000' in summary
+    grounded = [e for e in state.events if e.kind == "arguments_grounded"][-1]
+    assert grounded.detail["provenance"]["path.payment_id"]["step_id"] == "call"
+    assert "/v1/payments/pay_acm00000002/refunds" in summary  # the concrete target
+    payment = h.app.state.sandbox.tenant("acme").payments["pay_acm00000002"]
+    assert payment["refunds"] == []  # nothing ran before approval
+
+
+async def test_invented_identifiers_in_the_reply_are_retried_then_masked() -> None:
+    h = build_harness()
+    llm = ScriptedModelProvider(
+        [
+            intent("api_discovery"),
+            call("api.search", query="refund a payment"),
+            FINISH,
+            reply("Use `refundPayment`, e.g. for pay_12345 via `refundEverything`."),
+            reply("Use `refundPayment`; pay_99999 is an example.", ("operation_list", "search")),
+        ]
+    )
+    state = await Orchestrator(h.services.runtime, llm=llm).run(
+        "Which API refunds a payment?", principal=DEV, environment="sandbox"
+    )
+    assert state.status is RunStatus.COMPLETED
+    retry = [r for r in llm.requests if r.task == "respond"][1]
+    assert "pay_12345" in retry.user and "refundEverything" in retry.user  # the feedback
+    assert state.message == "Use `refundPayment`; [unverified] is an example."
+    masked = next(e for e in state.events if e.kind == "reply_ungrounded")
+    assert masked.detail["masked"] == ["pay_99999"]
+    assert state.model_usage and state.model_usage.calls == 5
+
+
+async def test_invalid_component_choices_fall_back_to_real_data() -> None:
+    h = build_harness()
+    llm = ScriptedModelProvider(
+        [
+            intent("api_discovery"),
+            call("api.search", query="refund a payment"),
+            FINISH,
+            # Sources named by operation id, for components with no matching step.
+            reply("Use `refundPayment`.", ("operation_detail", "refundPayment")),
+        ]
+    )
+    state = await Orchestrator(h.services.runtime, llm=llm).run(
+        "Which API refunds a payment?", principal=DEV, environment="sandbox"
+    )
+    assert [(c.component, c.source) for c in state.ui] == [("operation_list", "search")]
+    ui_event = next(e for e in state.events if e.kind == "ui")
+    assert any("default layout" in r for r in ui_event.detail["rejected"])
+
+
+async def test_a_source_named_by_operation_id_maps_to_its_step() -> None:
+    h = build_harness()
+    llm = ScriptedModelProvider(
+        [
+            intent("api_explanation"),
+            call("api.search", query="create a payment"),
+            call("api.describe", operation_id="createPayment"),
+            call("api.describe", operation_id="refundPayment"),
+            FINISH,
+            reply("`createPayment` needs payments:write.", ("operation_detail", "createPayment")),
+        ]
+    )
+    state = await Orchestrator(h.services.runtime, llm=llm).run(
+        "Explain createPayment", principal=DEV, environment="sandbox"
+    )
+    assert [(c.component, c.source) for c in state.ui] == [("operation_detail", "describe")]
+
+
+async def test_an_identical_call_that_already_failed_is_not_retried() -> None:
+    h = build_harness()
+    llm = ScriptedModelProvider(
+        [
+            intent("api_explanation"),
+            call("api.describe", operation_id="noSuchOperation"),  # NOT_FOUND, an observation
+            call("api.describe", operation_id="noSuchOperation"),  # identical: refused
+            call("api.search", query="create a payment"),
+            FINISH,
+            reply("Search for the operation first.", ("operation_list", "search")),
+        ]
+    )
+    state = await Orchestrator(h.services.runtime, llm=llm).run(
+        "Explain noSuchOperation", principal=DEV, environment="sandbox"
+    )
+    assert tool_skills(state) == ["api.describe", "api.search"]  # the repeat never ran
+    reasons = [e.detail["reason"] for e in state.events if e.kind == "plan_rejected"]
+    assert any("already failed with these arguments" in r for r in reasons)
+
+
+async def test_unusable_planner_output_after_progress_still_answers() -> None:
+    h = build_harness()
+    llm = ScriptedModelProvider(
+        [
+            intent("api_discovery"),
+            call("api.search", query="track a shipment"),
+            "not json",  # the planner's output and its repair retry are both unusable
+            "still not json",
+            reply("Use `getShipmentTracking`.", ("operation_list", "search")),
+        ]
+    )
+    state = await Orchestrator(h.services.runtime, llm=llm).run(
+        "which endpoint tracks a shipment?", principal=DEV, environment="sandbox"
+    )
+    assert state.status is RunStatus.COMPLETED and state.message == "Use `getShipmentTracking`."
+    assert any(e.kind == "plan_unusable" for e in state.events)
+    assert state.model_usage and state.model_usage.failures == 1
+
+
+async def test_unusable_planner_output_before_any_progress_fails() -> None:
+    h = build_harness()
+    llm = ScriptedModelProvider([intent("api_discovery"), "not json", "still not json"])
+    state = await Orchestrator(h.services.runtime, llm=llm).run(
+        "which endpoint tracks a shipment?", principal=DEV, environment="sandbox"
+    )
+    assert state.status is RunStatus.FAILED and state.tool_calls == 0
+
+
+async def test_the_reply_is_told_which_tenant_the_data_belongs_to() -> None:
+    h = build_harness()
+    llm = ScriptedModelProvider(
+        [
+            intent("api_execution"),
+            call("api.call.read", operation_id="listPayments"),
+            FINISH,
+            reply("Here are your payments.", ("api_response", "call")),
+        ]
+    )
+    await Orchestrator(h.services.runtime, llm=llm).run(
+        "Show me every payment for the globex tenant", principal=DEV, environment="sandbox"
+    )
+    respond = next(r for r in llm.requests if r.task == "respond")
+    assert "Caller's tenant: acme" in respond.user
+    assert "another tenant's data" in respond.system
+
+
+async def test_a_wall_clock_jump_does_not_exhaust_the_run_budget(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Sleep/wake or an NTP step moves time.time(); the budget runs on a monotonic clock."""
+    import time as real_time
+
+    h = build_harness()
+    llm = ScriptedModelProvider(
+        [
+            intent("api_discovery"),
+            call("api.search", query="track a shipment"),
+            FINISH,
+            reply("Use `getShipmentTracking`.", ("operation_list", "search")),
+        ]
+    )
+    jumped = real_time.time() + 3600  # an hour "passes" on the wall clock only
+    orchestrator = Orchestrator(h.services.runtime, llm=llm)
+    original = orchestrator.step_planner.next_step  # type: ignore[union-attr]
+
+    async def jump_then_plan(*args: Any, **kwargs: Any) -> Any:
+        monkeypatch.setattr(real_time, "time", lambda: jumped)
+        return await original(*args, **kwargs)
+
+    monkeypatch.setattr(orchestrator.step_planner, "next_step", jump_then_plan)
+    state = await orchestrator.run(
+        "which endpoint tracks a shipment?", principal=DEV, environment="sandbox"
+    )
+    assert state.status is RunStatus.COMPLETED, state.message
+    assert state.elapsed_s < 60
+
+
+async def test_orchestrator_describes_do_not_use_the_models_step_budget() -> None:
+    """The live G3 trace: search, list, a redundant get, then the refund, none described."""
+    h = build_harness()
+    llm = ScriptedModelProvider(
+        [
+            intent("api_execution", amount_minor=10000, currency="INR"),
+            call("api.search", query="refund a payment"),
+            call("api.call.read", operation_id="listPayments", query={"status": "captured"}),
+            call(
+                "api.call.read",
+                operation_id="getPayment",
+                path_params={"payment_id": "pay_acm00000002"},
+            ),
+            call(
+                "api.call.write",
+                operation_id="refundPayment",
+                path_params={"payment_id": "pay_acm00000002"},
+                body={"amount": 10000},
+            ),
+        ]
+    )
+    state = await Orchestrator(h.services.runtime, llm=llm).run(
+        "Refund the latest captured payment for ₹100", principal=DEV, environment="sandbox"
+    )
+    assert state.status is RunStatus.AWAITING_APPROVAL, state.message
+    assert state.plan is not None
+    assert sum(not s.auto for s in state.plan.steps) == 4  # the model's own steps
+    assert state.tool_calls <= state.budget.max_tool_calls  # every call still counts
+    assert state.pending_approval and "/v1/payments/pay_acm00000002/refunds" in (
+        state.pending_approval.summary
+    )
+
+
+async def test_a_write_that_uses_the_last_tool_call_still_completes(tmp_path: Path) -> None:
+    """Live finding: the approved refund ran (HTTP 200) and the run then FAILED on budget."""
+    h = build_harness()
+    store = FileCheckpointStore(tmp_path)
+    budget = RunBudget(max_steps=6, max_tool_calls=4, deadline_s=240)
+    script = [
+        intent("api_execution", amount_minor=10000, currency="INR"),
+        call("api.call.read", operation_id="listPayments", query={"status": "captured"}),
+        call(
+            "api.call.write",
+            operation_id="refundPayment",
+            path_params={"payment_id": "pay_acm00000002"},
+            body={"amount": 10000},
+        ),
+        reply("Refunded ₹100 on `pay_acm00000002`.", ("api_response", "call_2")),
+    ]
+    llm = ScriptedModelProvider(script)
+    state = await Orchestrator(h.services.runtime, llm=llm, checkpoints=store, budget=budget).run(
+        "Refund the latest captured payment for ₹100", principal=DEV, environment="sandbox"
+    )
+    assert state.status is RunStatus.AWAITING_APPROVAL and state.pending_approval
+    token = await ApprovalService(h.services.approval_signer, LocalPolicyEngine()).approve(
+        approver=APPROVER,
+        action_hash=state.pending_approval.action_hash,
+        tenant_id="acme",
+        environment="sandbox",
+    )
+    done = await Orchestrator(h.services.runtime, llm=llm, checkpoints=store, budget=budget).resume(
+        state.run_id, approval_token=token
+    )
+    assert done.tool_calls >= budget.max_tool_calls  # the budget is used up
+    assert done.status is RunStatus.COMPLETED, done.message
+    assert any(e.kind == "budget_reached" for e in done.events)
+    payment = h.app.state.sandbox.tenant("acme").payments["pay_acm00000002"]
+    assert len(payment["refunds"]) == 1

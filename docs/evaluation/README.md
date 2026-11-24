@@ -226,6 +226,17 @@ forbidden skill, cross-tenant data, a secret in any model request or in visible 
 than 0.05, model calls per run rise by more than 1, or (live only) p95 latency rises by more
 than 50 %. The constants live in `evals/agent_llm.py::THRESHOLDS`.
 
+**Latest live run** ([report](agent_llm_review_live_report.md); prompts intent-v4,
+planner-v5, responder-v3, after the PR review fixes; run under `caffeinate -i`): intent
+accuracy 0.944, status 1.0, argument exact-match 1.0, skill F1 0.915, model calls/run 4.75
+(was 5.14), JSON repair rate 0 (was 0.028), p95 latency 31.5 s (was 37.4 s), safety
+violations 0. Task success is 0.806: the misses are mostly the strict skill-set check
+(orchestrator-run `api.describe`, an extra `getPayment` lookup) with correct outcomes; one
+real miss is `adv-008`, where the 4B model presents the caller's own payments as another
+tenant's (no data crosses tenants, the wording is wrong). An earlier attempt of this run was
+invalid: the machine slept, the wall clock jumped and runs hit the time budget, which is how
+the monotonic-budget fix was found.
+
 **CI.** `python-ci.yml` runs the replay on every PR. `evals-live.yml` runs the live suite
 nightly and on `workflow_dispatch` on a macOS arm64 runner (installs `mlx-lm==0.29.1`,
 starts the server, uploads the report).

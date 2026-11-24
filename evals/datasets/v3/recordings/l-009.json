@@ -2,20 +2,20 @@
  "case": "l-009",
  "provider": "mlx",
  "model": "mlx-community/Qwen3-4B-Instruct-2507-4bit",
- "recorded_at": "2026-11-24T04:00:59.629670+00:00",
+ "recorded_at": "2026-11-24T11:00:08.538114+00:00",
  "prompt_versions": [
-  "intent=intent-v3",
-  "plan=planner-v4",
-  "respond=responder-v2"
+  "intent=intent-v4",
+  "plan=planner-v5",
+  "respond=responder-v3"
  ],
- "latency_ms": 24048.3,
+ "latency_ms": 23499.9,
  "outputs": [
-  "{\n  \"intent\": \"code_generation\",\n  \"confidence\": 0.99,\n  \"rationale\": \"The request asks for a cURL command to create a customer payment, indicating a need for a code sample.\",\n  \"entities\": {\n    \"operation_hint\": \"create a customer payment\",\n    \"currency\": null,\n    \"amount_minor\": null,\n    \"payment_id\": null,\n    \"customer_id\": null,\n    \"order_id\": null,\n    \"status_codes\": [],\n    \"languages\": [],\n    \"status_filter\": null,\n    \"refund_reason\": null\n  }\n}",
-  "{\"thought\": \"Find the operation to create a customer payment\", \"action\": \"call\", \"skill_id\": \"api.search\", \"arguments\": {\"query\": \"create a customer payment\"}}",
+  "{\n  \"intent\": \"code_generation\",\n  \"confidence\": 0.99,\n  \"rationale\": \"The request asks for a cURL command to create a customer payment, indicating a need for a code sample.\",\n  \"entities\": {\n    \"payment_id\": null,\n    \"customer_id\": null,\n    \"order_id\": null,\n    \"amount_minor\": null,\n    \"currency\": null,\n    \"status_codes\": [],\n    \"languages\": [],\n    \"status_filter\": null,\n    \"refund_reason\": null,\n    \"operation_hint\": \"create a customer payment\"\n  }\n}",
+  "{\"thought\": \"Find the operation for creating a customer payment\", \"action\": \"call\", \"skill_id\": \"api.search\", \"arguments\": {\"query\": \"create a customer payment\"}}",
   "{\"thought\": \"Find cURL command to create a customer payment\", \"action\": \"call\", \"skill_id\": \"code.generate\", \"arguments\": {\"operation_id\": \"createPayment\", \"languages\": [\"curl\"]}}",
   "{\"thought\": \"Generate cURL command for creating a customer payment\", \"action\": \"call\", \"skill_id\": \"code.generate\", \"arguments\": {\"operation_id\": \"createPayment\", \"languages\": [\"curl\"]}}",
   "{\"thought\": \"Generate cURL command for creating a customer payment\", \"action\": \"call\", \"skill_id\": \"code.generate\", \"arguments\": {\"operation_id\": \"createPayment\", \"languages\": [\"curl\"]}}",
   "{\"thought\": \"CURL command for creating a customer payment is already generated in previous step.\", \"action\": \"finish\"}",
-  "{\n  \"message\": \"cURL command to create a customer payment:\\n\\n```bash\\ncurl -sS -X POST http://sandbox.local/v1/payments \\\\ \\n  -H \\\"Authorization: Bearer $COPILOT_TOKEN\\\" \\\\ \\n  -H 'Accept: application/json' \\\\ \\n  -H 'Content-Type: application/json' \\\\ \\n  -H 'Idempotency-Key: <unique-key>' \\\\ \\n  --data '{\\\"amount\\\":100,\\\"currency\\\":\\\"INR\\\",\\\"customer_id\\\":\\\"<string>\\\"}'\\n```\\n\\nSet `COPILOT_TOKEN` to an OAuth access token with scope: `payments:write`. Replace `<unique-key>` with a new idempotency key per request. Replace placeholder values in the request body.\",\n  \"components\": [\n    {\n      \"component\": \"code_snippets\",\n      \"source\": \"codegen\"\n    }\n  ]\n}"
+  "{\"message\":\"cURL command to create a customer payment:\\n\\n```bash\\ncurl -sS -X POST http://sandbox.local/v1/payments \\\\ \\n  -H \\\"Authorization: Bearer $COPILOT_TOKEN\\\" \\\\ \\n  -H 'Accept: application/json' \\\\ \\n  -H 'Content-Type: application/json' \\\\ \\n  -H 'Idempotency-Key: <unique-key>' \\\\ \\n  --data '{\\\"amount\\\":100,\\\"currency\\\":\\\"INR\\\",\\\"customer_id\\\":\\\"<string>\\\"}'\\n```\\n\\nSet `COPILOT_TOKEN` to an OAuth access token with scope `payments:write`. Replace `<unique-key>` with a new idempotency key per request. Replace placeholder values in the request body. The amount `100` is ₹100.00 (in INR).\",\"components\":[{\"component\":\"code_snippets\",\"source\":\"codegen\"}]}"
  ]
 }

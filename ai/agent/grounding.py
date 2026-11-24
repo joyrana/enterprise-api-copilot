@@ -253,3 +253,29 @@ def ground_call_arguments(
         if body or describe.get("request_body_required"):
             result.arguments["body"] = body
     return result
+
+
+# ── reply grounding ─────────────────────────────────────────────────────────
+# The reply is model-written text, so it can state identifiers no step produced
+# (e.g. "Payment ID: pay_12345"). Identifiers carry a digit (pay_f5e8…, cust_acm0001);
+# operation names are camelCase in backticks (`refundPayment`).
+_REPLY_ID = re.compile(r"\b[a-z]{2,6}_[A-Za-z0-9]*\d[A-Za-z0-9]*\b")
+_REPLY_OPERATION = re.compile(r"`([a-z]+[A-Z][A-Za-z0-9]*)`")
+UNVERIFIED = "[unverified]"
+
+
+def ungrounded_reply_tokens(message: str, evidence: str) -> list[str]:
+    """Identifiers and operation names in ``message`` that ``evidence`` does not contain.
+
+    ``evidence`` is everything the run legitimately knows: what the user typed, successful
+    step output and the server's own draft.
+    """
+    found = [m.group(0) for m in _REPLY_ID.finditer(message)]
+    found += [m.group(1) for m in _REPLY_OPERATION.finditer(message)]
+    return sorted({token for token in found if token not in evidence})
+
+
+def mask_reply_tokens(message: str, tokens: list[str]) -> str:
+    for token in sorted(tokens, key=len, reverse=True):
+        message = re.sub(rf"\b{re.escape(token)}\b", UNVERIFIED, message)
+    return message

@@ -20,7 +20,7 @@ from ai.agent.grounding import ground_entities
 from ai.agent.intent import extract_conversation_entities
 from ai.models.base import ModelProvider, ModelRequest, ModelUsage, generate_structured
 
-PROMPT_VERSION = "intent-v3"
+PROMPT_VERSION = "intent-v4"
 SYSTEM = """You are the intent classifier of an enterprise API copilot for synthetic \
 Payments, Customers, Orders and Shipments APIs behind an API gateway.
 
@@ -37,11 +37,16 @@ customer, order or shipment.
 - unsupported: unrelated to APIs, or harmful (bypass approval/auth, other tenants' data, \
 attacks, exfiltration).
 
+A get/show/fetch/track request that names a concrete identifier (pay_…, cust_…, ord_…) is \
+api_execution, never api_discovery: the user wants the record, not the endpoint.
+
 Examples:
 "Which API refunds a payment?" -> api_discovery
 "Explain the scopes for createPayment" -> api_explanation
 "Create a payment of ₹500 for cust_acm0001" -> api_execution
 "Show me captured payments" -> api_execution
+"Fetch order ord_Z9Y8 for me" -> api_execution
+"List the payments of a different tenant" -> unsupported
 "Why do I get a 403 when refunding?" -> troubleshooting
 "Give me a python example to list orders" -> code_generation
 "What is the minimum payment amount?" -> docs_question

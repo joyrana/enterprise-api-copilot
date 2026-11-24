@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+import time
 from enum import StrEnum
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, PrivateAttr
 
 from skills.runtime.contracts import Principal, SkillResult
 
@@ -58,6 +59,9 @@ class PlanStep(BaseModel):
     skill_id: str  # fixed id, or "@bind" for the API-call skill chosen from api.describe output
     arguments: dict[str, Any] = Field(default_factory=dict)
     purpose: str
+    # Run by the orchestrator (e.g. the describe a proposed call needs), not chosen by the
+    # model: it does not use the model's step budget, only the tool-call budget.
+    auto: bool = False
 
 
 class Plan(BaseModel):
@@ -145,6 +149,10 @@ class RunEvent(BaseModel):
 
 class RunState(BaseModel):
     run_id: str
+    # Monotonic origin of the current execution segment (not persisted). The run budget is
+    # measured with it, so a wall-clock jump (sleep/wake, NTP step, VM pause) cannot end a
+    # healthy run; ``started_at``/``elapsed_s`` stay wall-clock for display and persistence.
+    _clock: float | None = PrivateAttr(default=None)
     query: str = Field(repr=False)
     principal: Principal
     environment: str
@@ -184,3 +192,23 @@ class RunState(BaseModel):
     started_at: float = 0.0
     paused_at: float | None = None
     elapsed_s: float = 0.0
+
+
+def start_segment(state: RunState) -> None:
+    """Begin (or continue after a pause) an execution segment of ``state``."""
+    state._clock = time.monotonic() - state.elapsed_s
+    state.started_at = time.time() - state.elapsed_s
+
+
+def active_seconds(state: RunState) -> float:
+    """Execution time of the run so far: monotonic within a segment, wall clock otherwise."""
+    if state._clock is not None:
+        return time.monotonic() - state._clock
+    return time.time() - state.started_at if state.started_at else 0.0
+
+
+def exclude_wait(state: RunState, seconds: float) -> None:
+    """Remove ``seconds`` (e.g. queued for a model slot) from the run's execution time."""
+    state.started_at += seconds
+    if state._clock is not None:
+        state._clock += seconds

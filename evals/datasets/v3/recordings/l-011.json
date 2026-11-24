@@ -2,17 +2,17 @@
  "case": "l-011",
  "provider": "mlx",
  "model": "mlx-community/Qwen3-4B-Instruct-2507-4bit",
- "recorded_at": "2026-11-24T04:01:37.859636+00:00",
+ "recorded_at": "2026-11-24T11:00:45.787036+00:00",
  "prompt_versions": [
-  "intent=intent-v3",
-  "plan=planner-v4",
-  "respond=responder-v2"
+  "intent=intent-v4",
+  "plan=planner-v5",
+  "respond=responder-v3"
  ],
- "latency_ms": 12830.6,
+ "latency_ms": 9362.3,
  "outputs": [
-  "{\n  \"intent\": \"docs_question\",\n  \"confidence\": 0.99,\n  \"rationale\": \"The request asks about a policy or limit stated in documentation.\",\n  \"entities\": {\n    \"payment_id\": null,\n    \"customer_id\": null,\n    \"order_id\": null,\n    \"amount_minor\": null,\n    \"currency\": null,\n    \"status_codes\": [],\n    \"languages\": [],\n    \"status_filter\": null,\n    \"refund_reason\": null,\n    \"operation_hint\": null\n  }\n}",
-  "{\"thought\": \"Determine the minimum payment amount from documentation.\", \"action\": \"call\", \"skill_id\": \"docs.search\", \"arguments\": {\"query\": \"minimum payment amount\", \"k\": 5}}",
+  "{\n  \"intent\": \"docs_question\",\n  \"confidence\": 1,\n  \"rationale\": \"The request asks about a policy or limit stated in documentation.\",\n  \"entities\": {\n    \"payment_id\": null,\n    \"customer_id\": null,\n    \"order_id\": null,\n    \"amount_minor\": null,\n    \"currency\": null,\n    \"status_codes\": [],\n    \"languages\": [],\n    \"status_filter\": null,\n    \"refund_reason\": null,\n    \"operation_hint\": null\n  }\n}",
+  "{\"thought\": \"Determine the minimum payment amount from documentation.\", \"action\": \"call\", \"skill_id\": \"docs.search\", \"arguments\": {\"query\": \"minimum payment amount\", \"k\": 1}}",
   "{\"thought\": \"Minimum payment amount is documented in the payments guide.\", \"action\": \"finish\", \"skill_id\": \"\", \"arguments\": {}}",
-  "{\"message\":\"The minimum payment amount is 100 (in the smallest currency unit: paise for INR, cents for USD/EUR). This applies to all supported currencies (INR, USD, EUR). An amount below 100 will result in a 422 Unprocessable Entity error. [1][2]\",\"components\":[{\"component\":\"doc_sources\",\"source\":\"1\"},{\"component\":\"doc_sources\",\"source\":\"2\"}]}"
+  "{\"message\":\"The minimum payment amount is 100, in the smallest currency unit (e.g., paise for INR, cents for USD).\",\"components\":[{\"component\":\"doc_sources\",\"source\":\"1\"}]}"
  ]
 }

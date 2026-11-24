@@ -2,22 +2,20 @@
  "case": "l-016",
  "provider": "mlx",
  "model": "mlx-community/Qwen3-4B-Instruct-2507-4bit",
- "recorded_at": "2026-11-24T04:03:17.551001+00:00",
+ "recorded_at": "2026-11-24T11:02:27.148288+00:00",
  "prompt_versions": [
-  "intent=intent-v3",
-  "plan=planner-v4",
-  "respond=responder-v2"
+  "intent=intent-v4",
+  "plan=planner-v5",
+  "respond=responder-v3"
  ],
- "latency_ms": 20576.7,
+ "latency_ms": 20224.2,
  "outputs": [
   "{\n  \"intent\": \"token_inspection\",\n  \"confidence\": 0.99,\n  \"rationale\": \"The request explicitly asks to decode a JWT token.\",\n  \"entities\": {\n    \"payment_id\": null,\n    \"customer_id\": null,\n    \"order_id\": null,\n    \"amount_minor\": null,\n    \"currency\": null,\n    \"status_codes\": [],\n    \"languages\": [],\n    \"status_filter\": null,\n    \"refund_reason\": null,\n    \"operation_hint\": null\n  }\n}",
   "{\"thought\": \"Initiate token inspection to decode the provided JWT.\", \"action\": \"call\", \"skill_id\": \"token.inspect\", \"arguments\": {\"token\": \"<JWT>\"}}",
-  "{\"thought\": \"Attempt to decode the provided JWT token\", \"action\": \"call\", \"skill_id\": \"token.inspect\", \"arguments\": {\"token\": \"<JWT>\"}}",
-  "{\"thought\": \"Attempt to decode the provided JWT token\", \"action\": \"call\", \"skill_id\": \"token.inspect\", \"arguments\": {\"token\": \"<JWT>\"}}",
-  "{\"thought\": \"Attempt to decode the provided JWT token.\", \"action\": \"call\", \"skill_id\": \"token.inspect\", \"arguments\": {\"token\": \"<JWT>\"}}",
-  "{\"thought\": \"Attempt to decode the provided JWT token.\", \"action\": \"call\", \"skill_id\": \"token.inspect\", \"arguments\": {\"token\": \"<JWT>\"}}",
-  "{\"thought\": \"Attempt to decode the JWT token using token.inspect\", \"action\": \"call\", \"skill_id\": \"token.inspect\", \"arguments\": {\"token\": \"<JWT>\"}}",
-  "{\"message\":\"The provided token cannot be decoded as it is not a valid JWT. The input is invalid or malformed.\",\"components\":[[\"jwt_report\",\"\"]]]}",
-  "{\n  \"message\": \"The provided token cannot be decoded as it is not a valid JWT. The input is invalid or malformed.\",\n  \"components\": [\n    {\n      \"component\": \"jwt_report\",\n      \"source\": \"\"\n    }\n  ]\n}"
+  "{\"thought\": \"Token inspection failed due to expiration and invalid signature; need to decode the provided JWT.\", \"action\": \"call\", \"skill_id\": \"token.inspect\", \"arguments\": {\"token\": \"<JWT>\"}}",
+  "{\"thought\": \"Token inspection failed due to expiration and invalid signature; need to decode the provided JWT.\", \"action\": \"call\", \"skill_id\": \"token.inspect\", \"arguments\": {\"token\": \"<JWT>\"}}",
+  "{\"thought\": \"Token inspection already failed; need to diagnose the JWT decoding issue.\", \"action\": \"call\", \"skill_id\": \"docs.search\", \"arguments\": {\"query\": \"how to decode a JWT token manually\", \"k\": 3, \"mode\": \"keyword\"}}",
+  "{\"thought\": \"Determine how to decode a JWT token manually\", \"action\": \"call\", \"skill_id\": \"docs.search\", \"arguments\": {\"query\": \"how to decode a JWT token manually\", \"k\": 3, \"mode\": \"keyword\"}}",
+  "{\n  \"message\": \"The JWT token has been inspected and decoded. It uses HS256 algorithm, is expired, and lacks valid signature verification. Scopes available: payments:read. The token is invalid due to expiration and signature issues. A new token must be requested with valid scopes and proper signing (prefer RS/ES/PS for production).\",\n  \"components\": [\n    {\n      \"component\": \"jwt_report\",\n      \"source\": \"inspect\"\n    },\n    {\n      \"component\": \"doc_sources\",\n      \"source\": \"docs\"\n    }\n  ]\n}"
  ]
 }

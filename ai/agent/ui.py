@@ -429,59 +429,81 @@ def build_components(
         for step_id, result in state.results.items()
         if result.ok and result.output is not None
     }
-    if choices is None:
-        choices = []
-        for step_id, result in ok_steps.items():
-            spec = next(
-                (s for s in REGISTRY.values() if result.skill_id in s.sources and s.selectable),
-                None,
-            )
-            if spec is not None:
-                choices.append((spec.name, step_id))
-    out: list[UIComponent] = []
-    rejected: list[str] = []
-    seen: set[tuple[str, str]] = set()
-    for name, source in choices:
-        spec = REGISTRY.get(name)
-        if spec is None or not spec.selectable:
-            rejected.append(f"{name}: not a selectable component")
-            continue
-        if spec.sources:
-            chosen = ok_steps.get(source)
-            if chosen is None or chosen.skill_id not in spec.sources:
-                # Small models often name the wrong source (e.g. a citation marker). When
-                # exactly one successful step fits the component, that step is meant.
-                fitting = [k for k, r in ok_steps.items() if r.skill_id in spec.sources]
-                if len(fitting) != 1:
+    defaults: list[tuple[str, str]] = []
+    for step_id, result in ok_steps.items():
+        spec = next(
+            (s for s in REGISTRY.values() if result.skill_id in s.sources and s.selectable),
+            None,
+        )
+        if spec is not None:
+            defaults.append((spec.name, step_id))
+
+    def resolve_source(spec: ComponentSpec, source: str) -> str | None:
+        chosen = ok_steps.get(source)
+        if chosen is not None and chosen.skill_id in spec.sources:
+            return source
+        fitting = [k for k, r in ok_steps.items() if r.skill_id in spec.sources]
+        # Small models often name the wrong source: a citation marker ("1") or the
+        # operation id ("refundPayment") instead of the step id.
+        by_operation = [
+            k for k in fitting if (ok_steps[k].output or {}).get("operation_id") == source
+        ]
+        if len(by_operation) == 1:
+            return by_operation[0]
+        if len(fitting) == 1:
+            return fitting[0]
+        return None
+
+    def select(wanted: list[tuple[str, str]]) -> tuple[list[UIComponent], list[str]]:
+        out: list[UIComponent] = []
+        rejected: list[str] = []
+        seen: set[tuple[str, str]] = set()
+        for name, source in wanted:
+            spec = REGISTRY.get(name)
+            if spec is None or not spec.selectable:
+                rejected.append(f"{name}: not a selectable component")
+                continue
+            if spec.sources:
+                resolved = resolve_source(spec, source)
+                if resolved is None:
                     rejected.append(
                         f"{name}: '{source}' is not a successful {'/'.join(spec.sources)} step"
                     )
                     continue
-                source, chosen = fitting[0], ok_steps[fitting[0]]
-            if (name, source) in seen:
-                continue
-            try:
-                props = validate_props(name, spec.build(chosen.output or {}))
-            except ValidationError:
-                rejected.append(f"{name}: props built from '{source}' do not match its schema")
-                continue
-        else:
-            if (name, "") in seen or (
-                name == "run_trace" and not (state.plan and state.plan.steps)
-            ):
-                continue
-            props = validate_props(name, _trace_props(state))
-        seen.add((name, source if spec.sources else ""))
-        out.append(
-            UIComponent(
-                id=f"ui{len(out) + 1}",
-                component=name,
-                source=source if spec.sources else None,
-                props=props,
+                source = resolved
+                if (name, source) in seen:
+                    continue
+                try:
+                    props = validate_props(name, spec.build(ok_steps[source].output or {}))
+                except ValidationError:
+                    rejected.append(f"{name}: props built from '{source}' do not match its schema")
+                    continue
+            else:
+                if (name, "") in seen or (
+                    name == "run_trace" and not (state.plan and state.plan.steps)
+                ):
+                    continue
+                props = validate_props(name, _trace_props(state))
+            seen.add((name, source if spec.sources else ""))
+            out.append(
+                UIComponent(
+                    id=f"ui{len(out) + 1}",
+                    component=name,
+                    source=source if spec.sources else None,
+                    props=props,
+                )
             )
-        )
-        if len(out) >= MAX_COMPONENTS:
-            break
+            if len(out) >= MAX_COMPONENTS:
+                break
+        return out, rejected
+
+    out, rejected = select(defaults if choices is None else choices)
+    if choices is not None and defaults and not any(c.source for c in out):
+        # Every model choice was invalid (or it chose none) although real data exists:
+        # show that data rather than an empty panel. Props are still server-built.
+        fallback, _ = select(defaults)
+        out = fallback + out
+        rejected.append("no valid data component chosen; showing the default layout")
     if state.status is RunStatus.AWAITING_APPROVAL and state.pending_approval is not None:
         out.append(
             UIComponent(
